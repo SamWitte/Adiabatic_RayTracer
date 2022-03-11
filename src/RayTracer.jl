@@ -129,8 +129,8 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps::Int, Mvars::Array, Numer
     
     # Define the ODEproblem
     #prob = ODEProblem(func!, u0, tspan, [ω, Mvars], reltol=1e-8, abstol=ode_err, maxiters=1e5)
-    prob = ODEProblem(func!, u0, tspan, [ω, Mvars], reltol=1e-8, abstol=ode_err)
-    # prob = ODEProblem(func!, u0, tspan, [ω, Mvars], reltol=1e-8, abstol=ode_err, dtmin=1e-8, force_dtmin=true)
+    prob = ODEProblem(func!, u0, tspan, [ω, Mvars], reltol=1e-4, abstol=ode_err)
+    # prob = ODEProblem(func!, u0, tspan, [ω, Mvars], reltol=1e-7, abstol=ode_err, dtmin=1e-8, force_dtmin=true)
     
     # Solve the ODEproblem
     # sol = solve(prob, Vern6(), saveat=saveat)
@@ -1013,7 +1013,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
             SaveAll[photon_trajs:photon_trajs + num_photons - 1, 18] .= calpha[:]; # surf norm angle
         end
         
-        print(photon_trajs, "\t", num_photons, "\n")
+        # print(photon_trajs, "\t", num_photons, "\n")
         photon_trajs += num_photons;
         f_inx += batchsize;
         
