@@ -20,7 +20,7 @@ function parse_commandline()
         # number photon trajectories
         "--Nts"
             arg_type = Int
-            default = 100
+            default = 1000
         # file tage
         "--ftag"
             arg_type = String
@@ -89,12 +89,12 @@ Mass_NS = parsed_args["Mass_NS"]; # solar mass
 ωProp = "Simple"; # NR: Standard. Dispersion relation
 Ntajs = parsed_args["Nts"];
 gammaF = [1.0, 1.0]
-batchSize = 3; # how to batch runs
+batchSize = 4; # how to batch runs
 CLen_Scale = false # if true, perform cut due to de-phasing
 cutT = 10000; # keep highest weight 'cutT' each batch
 fix_time = 0.0; # eval at fixed time = 0?
 file_tag = parsed_args["ftag"] * "_GR_";  # if you dont want to cut on Lc "_NoCutLc_";
-ode_err = 1e-4; # need strong error
+ode_err = 1e-6; # need strong error
 ntimes = 300 # how many points on photon traj to keep
 vNS = [parsed_args["vNS_x"] parsed_args["vNS_y"] parsed_args["vNS_z"]]; # relative neutron star velocity
 flat = false; # flat space or schwartzchild
