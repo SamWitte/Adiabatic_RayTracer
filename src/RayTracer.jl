@@ -10,6 +10,8 @@ import ..Constants: c_km, hbar, GNew
 using ForwardDiff: gradient, derivative, Dual, Partials, hessian
 using OrdinaryDiffEq
 using LSODA
+using DiffEqBase
+# using DifferentialEquations
 # using CuArrays
 
 # CuArrays.allowscalar(false)
@@ -128,6 +130,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps::Int, Mvars::Array, Numer
     u0 = ([x0_pl w0_pl zeros(length(rr))])
     # u0 = ([x0_pl w0_pl])
    
+    bounce_threshold = 0.0
 
     function floor_aff!(int)
     
@@ -135,11 +138,11 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps::Int, Mvars::Array, Numer
         AA = sqrt.(1.0 .- r_s0 ./ int.u[:, 1])
         
         test = (erg ./ AA .- GJ_Model_ωp_vecSPH(int.u[:, 1:3], exp.(int.t), θm, ωPul, B0, rNS) ) ./ erg # if negative we have problem
-        fail_indx = [if test[i] .< 1e-3 i else -1 end for i in 1:length(int.u[:,1])]; # define when to bounce
+        fail_indx = [if test[i] .< bounce_threshold i else -1 end for i in 1:length(int.u[:,1])]; # define when to bounce
         fail_indx = fail_indx[ fail_indx .> 0];
        
         if int.dt > 1e-10
-            set_proposed_dt!(int,(int.t-int.tprev)/100)
+            set_proposed_dt!(int,(int.t-int.tprev)/10)
         end
         
         if length(fail_indx) .> 0
@@ -149,19 +152,20 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps::Int, Mvars::Array, Numer
             dωdr_grd ./= sqrt.(dωdr_grd[:, 1].^2 .* g_rr .+ dωdr_grd[:, 2].^2 .* g_thth  .+ dωdr_grd[:, 3].^2 .* g_pp) # eV / km, net: [ , km , km]
 
             int.u[fail_indx, 4:6] .= int.u[fail_indx, 4:6] .- 2.0 .* (int.u[fail_indx, 4] .* dωdr_grd[:, 1] .* g_rr .+ int.u[fail_indx, 5] .* dωdr_grd[:, 2] .* g_thth .+ int.u[fail_indx, 6] .* dωdr_grd[:, 3] .* g_pp) .* dωdr_grd;
-            print((int.u[fail_indx, 4] .* dωdr_grd[:, 1] .* g_rr .+ int.u[fail_indx, 5] .* dωdr_grd[:, 2] .* g_thth .+ int.u[fail_indx, 6] .* dωdr_grd[:, 3] .* g_pp), "\n")
+            
         end
     end
     function cond(u, lnt, integrator)
         r_s0 = 2.0 * Mass_NS * GNew / c_km^2
         AA = sqrt.(1.0 .- r_s0 ./ u[:, 1])
         
-        test = (erg ./ AA .- GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS)) ./ (erg ./ AA) .+ 1e-3 # trigger when closer to reflection....
+        test = (erg ./ AA .- GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS)) ./ (erg ./ AA) .+ bounce_threshold # trigger when closer to reflection....
         
         return minimum(test)
         
     end
-    cb = ContinuousCallback(cond, floor_aff!, repeat_nudge = 1//100, rootfind=DiffEqBase.RightRootFind)
+    cb = ContinuousCallback(cond, floor_aff!, interp_points=20, repeat_nudge = 1//100, rootfind=DiffEqBase.RightRootFind)
+    
 
     # Define the ODEproblem
     prob = ODEProblem(func!, u0, tspan, [ω, Mvars], reltol=1e-5, abstol=ode_err, max_iters=1e5, callback=cb, dtmin=1e-13, dtmax=1e-2, force_dtmin=true)
