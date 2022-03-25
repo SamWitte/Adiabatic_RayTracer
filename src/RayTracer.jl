@@ -1025,6 +1025,9 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         θi = acos.(1.0 .- 2.0 .* rand(length(rmag)));
         ϕi = rand(length(rmag)) .* 2π;
         newV = [sin.(θi) .* cos.(ϕi) sin.(θi) .* sin.(ϕi) cos.(θi)];
+        
+        
+        
         # define angle between surface normal and velocity
         calpha = RT.surfNorm(xpos_flat, newV, [func_use, [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS]], return_cos=true); # alpha
         weight_angle = abs.(calpha);
@@ -1060,7 +1063,8 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         
 
         # compute conversion prob
-        Prob = π ./ 2 .* (Ax_g .* B_tot) .^2 ./ conversion_F .* (1e9 .^2) ./ (vmag_tot ./ 2.998e5) .^2 ./ ((2.998e5 .* 6.58e-16) .^2) ./ sin.(acos.(cθ)).^4; #unitless
+        Prob_nonAD = π ./ 2 .* (Ax_g .* B_tot) .^2 ./ conversion_F .* (1e9 .^2) ./ (vmag_tot ./ 2.998e5) .^2 ./ ((2.998e5 .* 6.58e-16) .^2) ./ sin.(acos.(cθ)).^4; #unitless
+        Prob = (1.0 .- exp.(-Prob_nonAD));
 
         # phase space factors, first assumes vNS = 0, second more general but needs more samples
         if phaseApprox
