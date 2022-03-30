@@ -991,14 +991,13 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
     mcmc_weights = zeros(batchsize);
     filled_positions = false;
     fill_indx = 1;
+    Ncx_max = 1;
     
     while photon_trajs < desired_trajs
         # First part of code here is just written to generate evenly spaced samples of conversion surface
         while !filled_positions
             xv, Rv, numV, weights = RT.find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS)
-            # print(xv, "\t", Rv, "\t", numV, "\t", weights, "\n")
-            # count sample
-            f_inx += 1;
+
             
             if numV == 0
                 continue
@@ -1006,12 +1005,16 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
             
             # for i in 1:1
             for i in 1:numV # Keep more?
+                if weights[i] .> Ncx_max
+                    Ncx_max = numV[i]
+                end
                 if fill_indx <= batchsize
 
                     xpos_flat[fill_indx, :] .= xv[i, :];
                     R_sample[fill_indx] = Rv[i];
                     mcmc_weights[fill_indx] = weights[i];
                     fill_indx += 1
+                    f_inx += 1;
                 end
             end
             
@@ -1155,7 +1158,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
     
     # cut out unused elements
     SaveAll = SaveAll[SaveAll[:,6] .> 0, :];
-    SaveAll[:,6] ./= float(f_inx); # divide off by N trajectories sampled from MCMC sampling
+    SaveAll[:,6] ./= (float(f_inx) .* float(Ncx_max)); # divide off by N trajectories sampled
 
     fileN = "results/Fast_Trajectories_MassAx_"*string(Mass_a)*"_AxionG_"*string(Ax_g)*"_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0);
     fileN *= "_Ax_trajs_"*string(Ntajs);
