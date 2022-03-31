@@ -997,7 +997,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         # First part of code here is just written to generate evenly spaced samples of conversion surface
         while !filled_positions
             xv, Rv, numV, weights = RT.find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS)
-
+            f_inx += 2;
             
             if numV == 0
                 continue
@@ -1014,13 +1014,14 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
                     R_sample[fill_indx] = Rv[i];
                     mcmc_weights[fill_indx] = weights[i];
                     fill_indx += 1
-                    f_inx += 1;
+                    
                 end
             end
             
             if fill_indx > batchsize
                 filled_positions = true
                 fill_indx = 1
+                f_inx -= 1;
             end
         end
         filled_positions = false;
