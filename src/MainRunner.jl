@@ -122,7 +122,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     # Add all crossings to the tree
     for j in 1:length(xpos) 
 
-      if Prob[j]*event.weight > 1e-8 # Cutoff
+      if Prob[j]*event.weight > 1e-5 # Cutoff
         push!(events, RT.node(xpos[j], ypos[j], zpos[j], kx[j], ky[j],
                kz[j], new_species, Prob[j]*event.weight, event.weight))
       else
@@ -301,7 +301,10 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         xF, kF, tF, fail_indx = RT.propagate(func_use_SPHERE, xpos_flat, k_init, ntimes, MagnetoVars, NumerPass);
 
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        # to-do: do not recompute parent
+        # to-do: 
+        #  - do not recompute parent
+        #  - reduced effective mass of NS when the axion passes through
+        #  - add test for conversion surface in ODE solver to stop early
         for i in 1:batchsize
           parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
                 k_init[i, 1], k_init[i, 2], k_init[i, 3],
