@@ -236,14 +236,13 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
     mcmc_weights = zeros(batchsize);
     filled_positions = false;
     fill_indx = 1;
-
+    Ncx_max = 1;
+    
     while photon_trajs < desired_trajs
         # First part of code here is just written to generate evenly spaced samples of conversion surface
         while !filled_positions
             xv, Rv, numV, weights = RT.find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS)
-            # print(xv, "\t", Rv, "\t", numV, "\t", weights, "\n")
-            # count sample
-            f_inx += 1;
+            f_inx += 2;
             
             if numV == 0
                 continue
@@ -251,18 +250,23 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
             
             # for i in 1:1
             for i in 1:numV # Keep more?
+                if weights[i] .> Ncx_max
+                    Ncx_max = weights[i]
+                end
                 if fill_indx <= batchsize
 
                     xpos_flat[fill_indx, :] .= xv[i, :];
                     R_sample[fill_indx] = Rv[i];
                     mcmc_weights[fill_indx] = weights[i];
                     fill_indx += 1
+                    
                 end
             end
             
             if fill_indx > batchsize
                 filled_positions = true
                 fill_indx = 1
+                f_inx -= 1;
             end
         end
         filled_positions = false;
@@ -274,6 +278,8 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         θi = acos.(1.0 .- 2.0 .* rand(length(rmag)));
         ϕi = rand(length(rmag)) .* 2π;
         newV = [sin.(θi) .* cos.(ϕi) sin.(θi) .* sin.(ϕi) cos.(θi)];
+        
+        
         
         # define angle between surface normal and velocity
         calpha = RT.surfNorm(xpos_flat, newV, [func_use, [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS]], return_cos=true); # alpha
@@ -334,6 +340,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         sln_δk = RT.dk_ds(xpos_flat, k_init, [func_use, MagnetoVars]);
         conversion_F = sln_δk ./  (6.58e-16 .* 2.998e5) # 1/km^2;
         
+
         # compute conversion prob
         Prob_nonAD = π ./ 2 .* (Ax_g .* B_tot) .^2 ./ conversion_F .* (1e9 .^2) ./ (vmag_tot ./ 2.998e5) .^2 ./ ((2.998e5 .* 6.58e-16) .^2) ./ sin.(acos.(cθ)).^4; #unitless
         Prob = (1.0 .- exp.(-Prob_nonAD));
@@ -423,7 +430,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
     
     # cut out unused elements
     SaveAll = SaveAll[SaveAll[:,6] .> 0, :];
-    SaveAll[:,6] ./= float(f_inx); # divide off by N trajectories sampled from MCMC sampling
+    SaveAll[:,6] ./= (float(f_inx) .* float(Ncx_max)); # divide off by N trajectories sampled
 
     fileN = "results/Fast_Trajectories_MassAx_"*string(Mass_a)*"_AxionG_"*string(Ax_g)*"_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0);
     fileN *= "_Ax_trajs_"*string(Ntajs);
