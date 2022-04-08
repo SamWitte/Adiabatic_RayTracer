@@ -5,8 +5,12 @@ using NPZ
 using Dates
 using Statistics
 using Base
+using Random
 #using Profile
 include("RayTracer.jl")
+include("MainRunner.jl")
+
+
 
 function parse_commandline()
     s = ArgParseSettings()
@@ -20,7 +24,7 @@ function parse_commandline()
         # number photon trajectories
         "--Nts"
             arg_type = Int
-            default = 1000
+            default = 2 #!!!
         # file tage
         "--ftag"
             arg_type = String
@@ -95,7 +99,7 @@ cutT = 10000; # keep highest weight 'cutT' each batch
 fix_time = 0.0; # eval at fixed time = 0?
 file_tag = parsed_args["ftag"] * "_GR_";  # if you dont want to cut on Lc "_NoCutLc_";
 ode_err = 1e-6; # need strong error
-ntimes = 300 # how many points on photon traj to keep
+ntimes = 3000 # how many points on photon traj to keep
 vNS = [parsed_args["vNS_x"] parsed_args["vNS_y"] parsed_args["vNS_z"]]; # relative neutron star velocity
 flat = false; # flat space or schwartzchild
 isotropic = false; # default is anisotropic
