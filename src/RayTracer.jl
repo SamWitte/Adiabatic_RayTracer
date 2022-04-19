@@ -338,6 +338,69 @@ function dwdt_vec(x0, k0, tarr, Mvars)
     return delW
 end
 
+function solve_vel_CS(θ, ϕ, r, NS_vel; guess=[0.1 0.1 0.1], errV=1e-24, Mass_NS=1)
+    ff = sum(NS_vel.^2); # unitless
+    
+    GMr = GNew .* Mass_NS ./ r ./ (c_km .^ 2); # unitless
+    rhat = [sin.(θ) .* cos.(ϕ) sin.(θ) .* sin.(ϕ) cos.(θ)]
+
+    function f!(F, x)
+        vx, vy, vz = x
+        
+        denom = ff .+ GMr .- sqrt.(ff) .* sum(x .* rhat);
+
+        F[1] = (ff .* vx .+ sqrt.(ff) .* GMr .* rhat[1] .- sqrt.(ff) .* vx .* sum(x .* rhat)) ./ (NS_vel[1] .* denom) .- 1.0
+        F[2] = (ff .* vy .+ sqrt.(ff) .* GMr .* rhat[2] .- sqrt.(ff) .* vy .* sum(x .* rhat)) ./ (NS_vel[2] .* denom) .- 1.0
+        F[3] = (ff .* vz .+ sqrt.(ff) .* GMr .* rhat[3] .- sqrt.(ff) .* vz .* sum(x .* rhat)) ./ (NS_vel[3] .* denom) .- 1.0
+        # print(F[1], "\t",F[2], "\t", F[3],"\n")
+        # print(θ, "\t", ϕ,"\t", r, "\n")
+    end
+
+    soln = nlsolve(f!, guess, autodiff = :forward, ftol=errV, iterations=10000)
+
+    FF = zeros(3)
+    f!(FF, soln.zero)
+    accur = sqrt.(sum(FF.^2))
+    # print("accuracy... ", FF,"\n")
+    return soln.zero, accur
+end
+
+function jacobian_fv(x_in, vel_loc)
+
+    rmag = sqrt.(sum(x_in.^2));
+    ϕ = atan.(x_in[2], x_in[1])
+    θ = acos.(x_in[3] ./ rmag)
+
+    dvXi_dV = grad(v_infinity(θ, ϕ, rmag, seed(vel_loc), v_comp=1));
+    dvYi_dV = grad(v_infinity(θ, ϕ, rmag, seed(vel_loc), v_comp=2));
+    dvZi_dV = grad(v_infinity(θ, ϕ, rmag, seed(vel_loc), v_comp=3));
+    
+    
+    JJ = det([dvXi_dV; dvYi_dV; dvZi_dV])
+    # print("test vel... ", [dvXi_dV; dvYi_dV; dvZi_dV], "\n")
+    return abs.(JJ).^(-1)
+end
+
+function v_infinity(θ, ϕ, r, vel_loc; v_comp=1, Mass_NS=1)
+    vx, vy, vz = vel_loc
+    vel_loc_mag = sqrt.(sum(vel_loc.^2))
+    GMr = GNew .* Mass_NS ./ r ./ (c_km .^ 2); # unitless
+    
+    v_inf = sqrt.(vel_loc_mag.^2 .- 2 .* GMr); # unitless
+    
+    rhat = [sin.(θ) .* cos.(ϕ) sin.(θ) .* sin.(ϕ) cos.(θ)]
+    
+    denom = v_inf.^2 .+ GMr .- v_inf .* sum(vel_loc .* rhat);
+    if v_comp == 1
+        v_inf_comp = (v_inf.^2 .* vx .+ v_inf .* GMr .* rhat[1] .- v_inf .* vx .* sum(vel_loc .* rhat)) ./ denom
+    elseif v_comp == 2
+        v_inf_comp = (v_inf.^2 .* vy .+ v_inf .* GMr .* rhat[2] .- v_inf .* vy .* sum(vel_loc .* rhat)) ./ denom
+    else
+        v_inf_comp = (v_inf.^2 .* vz .+ v_inf .* GMr .* rhat[3] .- v_inf .* vz .* sum(vel_loc .* rhat)) ./ denom
+    end
+    return v_inf_comp
+end
+
 function cyclotronF(x0, t0, θm, ωPul, B0, rNS)
     Bvec, ωp = GJ_Model_scalar(x0, t0, θm, ωPul, B0, rNS)
     omegaC = sqrt.(sum(Bvec.^2, dims=2)) * 0.3 / 5.11e5 * (1.95e-20 * 1e18) # eV
@@ -1026,14 +1089,42 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         end
         filled_positions = false;
         
+        vIfty = erfinv.(2 .* rand(length(vmag), 3) .- 1.0) .* vmean_ax .+ v_NS # km /s
         rmag = sqrt.(sum(xpos_flat.^ 2, dims=2));
         vmag = sqrt.(2 * GNew .* Mass_NS ./ rmag) ; # km/s
         
-        # resample angle (this will be axion velocity at conversion surface)
-        θi = acos.(1.0 .- 2.0 .* rand(length(rmag)));
-        ϕi = rand(length(rmag)) .* 2π;
-        newV = [sin.(θi) .* cos.(ϕi) sin.(θi) .* sin.(ϕi) cos.(θi)];
+        newV = zeros(length(rmag), 3)
+        jacVs = zeros(length(rmag))
         
+        ϕ = atan.(view(xpos_flat, :, 2), view(xpos_flat, :, 1))
+        θ = acos.(view(xpos_flat, :, 3)./ rmag)
+        for i in 1:length(rmag)
+            found = false
+            cnt_careful= 0
+            while !found
+                vGu = rand()
+                velV, accur = RT.solve_vel_CS(θ[i], ϕ[i], rmag[i], vIfty[i,:] ./ 2.998e5, guess=[vGu vGu vGu], errV=1e-20)
+                if accur .< 1e-4
+                    newV[i, :] .= velV[1, :]
+                    jacVs[i] = RT.jacobian_fv(xpos_flat[i, :], velV)
+                    found = true
+                end
+                cnt_careful += 1
+                if cnt_careful > 50
+                    print("failing here at pt 1....")
+                    break;
+                end
+            end
+
+        end
+        newV ./= sqrt.(sum(newV .^ 2, dims=2));
+        
+        
+        
+#        # resample angle (this will be axion velocity at conversion surface)
+#        θi = acos.(1.0 .- 2.0 .* rand(length(rmag)));
+#        ϕi = rand(length(rmag)) .* 2π;
+#        newV = [sin.(θi) .* cos.(ϕi) sin.(θi) .* sin.(ϕi) cos.(θi)];
         
         
         # define angle between surface normal and velocity
@@ -1041,7 +1132,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         weight_angle = abs.(calpha);
 
         # sample asymptotic velocity
-        vIfty = erfinv.(2 .* rand(length(vmag), 3) .- 1.0) .* vmean_ax .+ v_NS # km /s
+        
         vIfty_mag = sqrt.(sum(vIfty.^2, dims=2));
         vel_eng = sum((vIfty ./ 2.998e5).^ 2, dims = 2) ./ 2;
         gammaA = 1 ./ sqrt.(1.0 .- (vIfty_mag ./ c_km).^2 )
@@ -1079,14 +1170,15 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
             phaseS = (π .* maxR .* R_sample .* 2.0) .* rho_DM .* Prob ./ Mass_a .* (vmag_tot ./ c_km) .^ 2 ./ sqrt.(sum( (vIfty ./ c_km) .^ 2, dims=2))
         else
             phaseS = (π .* maxR .* R_sample .* 2.0) .* rho_DM .* Prob ./ Mass_a
+            phaseS .*= jacVs
             # vmag is vmin [km/s]
             # vmag_tot is v [km/s]
-            rhat = xpos_flat ./ sqrt.(sum(xpos_flat.^2, dims=2));
-            vnear = vvec_flat .* vmag_tot;
-            vinf_mag = sqrt.(sum( (vIfty) .^ 2, dims=2));
-            vinf_gf = (vinf_mag.^2 .* vnear .+ vinf_mag .* vmag.^2 ./ 2 .* rhat .- vinf_mag .* vnear .* sum(vnear .* rhat, dims=2)) ./ (vinf_mag.^2 .+ vmag.^2 ./ 2 .- vinf_mag .* sum(vnear .* rhat, dims=2))
+#            rhat = xpos_flat ./ sqrt.(sum(xpos_flat.^2, dims=2));
+#            vnear = vvec_flat .* vmag_tot;
+#            vinf_mag = sqrt.(sum( (vIfty) .^ 2, dims=2));
+#            vinf_gf = (vinf_mag.^2 .* vnear .+ vinf_mag .* vmag.^2 ./ 2 .* rhat .- vinf_mag .* vnear .* sum(vnear .* rhat, dims=2)) ./ (vinf_mag.^2 .+ vmag.^2 ./ 2 .- vinf_mag .* sum(vnear .* rhat, dims=2))
 
-            phaseS .*= vmag_tot.^2 .* exp.(- sum((vinf_gf .- v_NS).^2, dims=2) ./ vmean_ax.^2 ) ./ (sqrt.(vmag_tot.^2 .- vmag.^2) .* exp.(- sum((vIfty .- v_NS).^2, dims=2) ./ vmean_ax.^2)) ./ c_km
+#            phaseS .*= vmag_tot.^2 .* exp.(- sum((vinf_gf .- v_NS).^2, dims=2) ./ vmean_ax.^2 ) ./ (sqrt.(vmag_tot.^2 .- vmag.^2) .* exp.(- sum((vIfty .- v_NS).^2, dims=2) ./ vmean_ax.^2)) ./ c_km
         end
         
         sln_prob = weight_angle .* phaseS .* (1e5 .^ 2) .* c_km .* 1e5 .* mcmc_weights .* fail_indx ; # photons / second
