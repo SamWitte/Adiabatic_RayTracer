@@ -13,6 +13,8 @@ using LSODA
 using DiffEqBase
 # using DifferentialEquations
 # using CuArrays
+using LinearAlgebra: cross, det
+using NLsolve
 
 # CuArrays.allowscalar(false)
 
@@ -1089,7 +1091,9 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         end
         filled_positions = false;
         
-        vIfty = erfinv.(2 .* rand(length(vmag), 3) .- 1.0) .* vmean_ax .+ v_NS # km /s
+ 
+        
+        vIfty = erfinv.(2 .* rand(batchsize, 3) .- 1.0) .* vmean_ax .+ v_NS # km /s
         rmag = sqrt.(sum(xpos_flat.^ 2, dims=2));
         vmag = sqrt.(2 * GNew .* Mass_NS ./ rmag) ; # km/s
         
