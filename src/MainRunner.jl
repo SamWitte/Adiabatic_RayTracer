@@ -60,13 +60,15 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     if event.species == "photon"
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose]
-      x_e, k_e, t_e, err_e = RT.propagate(func_use_SPHERE, pos0, k0,
-                      1000, Mvars, NumerPass, RT.func!)
+      x_e, k_e, t_e, err_e, cut_short = RT.propagate(func_use_SPHERE, pos0, k0,
+                      1000, Mvars, NumerPass, RT.func!,
+                      true, false, Mass_a, 3)
     else      
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose, Mass_a]
-      x_e, k_e, t_e, err_e = RT.propagate(func_use_SPHERE, pos0, k0,
-                        1000, Mvars, NumerPass, RT.func_axion!)
+      x_e, k_e, t_e, err_e, cut_short = RT.propagate(func_use_SPHERE, pos0, k0,
+                        1000, Mvars, NumerPass, RT.func_axion!,
+                        true, true, Mass_a, 3)
     end
     pos = transpose(x_e[1, :, :])
     kpos = transpose(k_e[1, :, :])

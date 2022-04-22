@@ -128,14 +128,18 @@ end
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 # propogate photon module
-function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!)
+function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
+    make_tree=false, is_axion=false, Mass_a=1e-6, max_crossings=3)
     ln_tstart, ln_tend, ode_err = NumerP
     
     tspan = (ln_tstart, ln_tend)
     saveat = (tspan[2] .- tspan[1]) ./ (nsteps-1)
     
-    θm, ωPul, B0, rNS, gammaF, time0, Mass_NS, erg, flat, isotropic, melrose = Mvars;
-    
+    if is_axion 
+      θm,ωPul,B0,rNS,gammaF,time0,Mass_NS,erg,flat,isotropic,melrose,Mass_a=Mvars;
+    else
+      θm,ωPul,B0,rNS,gammaF,time0,Mass_NS,erg,flat,isotropic,melrose=Mvars;
+    end
     if flat
         Mass_NS = 0.0;
     end
@@ -167,7 +171,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     u0 = ([x0_pl w0_pl zeros(length(rr))])
     # u0 = ([x0_pl w0_pl])
    
-    bounce_threshold = 0.0
+    bounce_threshold = 1e-3#0.0
 
     function floor_aff!(int)
     
@@ -204,9 +208,41 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     cb = ContinuousCallback(cond, floor_aff!, interp_points=20, repeat_nudge = 1//100, rootfind=DiffEqBase.RightRootFind)
     
 
-    # Define the ODEproblem
-    prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], reltol=1e-5, abstol=ode_err, max_iters=1e5, callback=cb, dtmin=1e-13, dtmax=1e-2, force_dtmin=true)
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    # Stop integration when a given number of level crossings is achieved
+    # Multiple callbacks -> CallbackSet
 
+    # 75     logdiff = (log.(RT.GJ_Model_ωp_vec(pos, 0.0, θm, ωPul, B0, rNS))             
+    # 76                .- log.(Mass_a))                                                  
+    # 77     cxing_st = RT.get_crossings(logdiff)
+
+    if make_tree
+      cut_short = false
+      function condition(u, lnt, integrator)
+        (log.(GJ_Model_ωp_vec(u, 0.0, θm, ωPul, B0, rNS)) .- log.(Mass_a))[1]
+      end
+
+      function affect!(integrator)
+          integrator.opts.userdata[:callback_count] +=1
+          if integrator.opts.userdata[:callback_count] ==
+                        integrator.opts.userdata[:max_count]
+              cut_short = true
+              terminate!(integrator)
+          end
+      end
+
+      callback = ContinuousCallback(condition, affect!)
+
+      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], reltol=1e-5, abstol=ode_err,
+                   max_iters=1e5, callback=CallbackSet(cb, callback),
+                   userdata=Dict(:callback_count=>0, :max_count=>max_crossings),
+                   #max_iters=1e5, callback=callback,
+                   dtmin=1e-13, dtmax=1e-2, force_dtmin=true)
+    else
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    # Define the ODEproblem
+      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], reltol=1e-5, abstol=ode_err, max_iters=1e5, callback=cb, dtmin=1e-13, dtmax=1e-2, force_dtmin=true)
+    end
 
     # Solve the ODEproblem
     sol = solve(prob, Vern6(), saveat=saveat)
@@ -275,9 +311,11 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     dr_dt = nothing;
     GC.gc();
     
-    
-    return x_reshaped, v_reshaped, dt, fail_indx
-    
+    if make_tree
+      return x_reshaped, v_reshaped, dt, fail_indx, cut_short
+    else
+      return x_reshaped, v_reshaped, dt, fail_indx
+    end
 end
 
 
