@@ -89,18 +89,59 @@ function func!(du, u, Mvars, lnt)
     end
 end
 
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# compute axion trajectories
+function func_axion!(du, u, Mvars, lnt)
+    @inbounds begin
+        t = exp.(lnt);
+        
+        Mass_NS = 1.0;
+        ω, Mvars2 = Mvars;
+        θm, ωPul, B0, rNS, gammaF, time0, Mass_NS, erg, flat, isotropic, melrose, mass_axion = Mvars2;
+        if flat
+            Mass_NS = 0.0;
+        end
+        time = time0 .+  t;
+        
+        g_tt, g_rr, g_thth, g_pp = g_schwartz(view(u, :, 1:3), Mass_NS);
+        
+        du[:, 4:6] .= -grad(hamiltonian_axion(seed(view(u, :, 1:3)), view(u, :, 4:6) .* erg , time[1], erg, θm, ωPul, B0, rNS, Mass_NS, mass_axion, iso=isotropic, melrose=melrose)) .* c_km .* t .* (g_rr ./ erg) ./ erg;
+        du[:, 1:3] .= grad(hamiltonian_axion(view(u, :, 1:3), seed(view(u, :, 4:6)  .* erg ), time[1], erg, θm, ωPul, B0, rNS, Mass_NS, mass_axion, iso=isotropic, melrose=melrose)) .* c_km .* t .* (g_rr ./ erg);
+        du[u[:,1] .<= rNS, :] .= 0.0;
+        
+        du[:,7 ] .= derivative(tI -> hamiltonian_axion(view(u, :, 1:3), view(u, :, 4:6)  .* erg , tI, erg, θm, ωPul, B0, rNS, Mass_NS, mass_axion, iso=isotropic, melrose=melrose), time[1])[:] .* c_km .* t .* (g_rr[:] ./ erg[:]);
+        
+    end
+end
 
-
+# Struct for conversion points in trajectory
+mutable struct node
+  x    # Conversion position
+  y
+  z
+  kx
+  ky
+  kz
+  species # Axion or photon?
+  #prob    # Conversion probability
+  weight
+  parent_weight
+end
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 # propogate photon module
-function propagate(ω, x0::Matrix, k0::Matrix,  nsteps::Int, Mvars::Array, NumerP::Array)
+function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
+    make_tree=false, is_axion=false, Mass_a=1e-6, max_crossings=3)
     ln_tstart, ln_tend, ode_err = NumerP
     
     tspan = (ln_tstart, ln_tend)
     saveat = (tspan[2] .- tspan[1]) ./ (nsteps-1)
     
-    θm, ωPul, B0, rNS, gammaF, time0, Mass_NS, erg, flat, isotropic, melrose = Mvars;
-    
+    if is_axion 
+      θm,ωPul,B0,rNS,gammaF,time0,Mass_NS,erg,flat,isotropic,melrose,Mass_a=Mvars;
+    else
+      θm,ωPul,B0,rNS,gammaF,time0,Mass_NS,erg,flat,isotropic,melrose=Mvars;
+    end
     if flat
         Mass_NS = 0.0;
     end
@@ -132,7 +173,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps::Int, Mvars::Array, Numer
     u0 = ([x0_pl w0_pl zeros(length(rr))])
     # u0 = ([x0_pl w0_pl])
    
-    bounce_threshold = 0.0
+    bounce_threshold = 1e-3#0.0
 
     function floor_aff!(int)
     
@@ -169,9 +210,42 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps::Int, Mvars::Array, Numer
     cb = ContinuousCallback(cond, floor_aff!, interp_points=20, repeat_nudge = 1//100, rootfind=DiffEqBase.RightRootFind)
     
 
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    # Stop integration when a given number of level crossings is achieved
+    # Multiple callbacks -> CallbackSet
+
+    # 75     logdiff = (log.(RT.GJ_Model_ωp_vec(pos, 0.0, θm, ωPul, B0, rNS))             
+    # 76                .- log.(Mass_a))                                                  
+    # 77     cxing_st = RT.get_crossings(logdiff)
+
+    if make_tree
+      cut_short = false
+      function condition(u, lnt, integrator)
+        (log.(GJ_Model_ωp_vec(u, 0.0, θm, ωPul, B0, rNS)) .- log.(Mass_a))[1]
+      end
+
+      function affect!(integrator)
+          integrator.opts.userdata[:callback_count] +=1
+          if integrator.opts.userdata[:callback_count] ==
+                        integrator.opts.userdata[:max_count]
+              cut_short = true
+              terminate!(integrator)
+          end
+      end
+
+      callback = ContinuousCallback(condition, affect!)
+
+      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], reltol=1e-5, abstol=ode_err,
+                   max_iters=1e5, callback=CallbackSet(cb, callback),
+                   userdata=Dict(:callback_count=>0, :max_count=>max_crossings),
+                   #max_iters=1e5, callback=callback,
+                   dtmin=1e-13, dtmax=1e-2, force_dtmin=true)
+    else
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     # Define the ODEproblem
-    prob = ODEProblem(func!, u0, tspan, [ω, Mvars], reltol=1e-5, abstol=ode_err, max_iters=1e5, callback=cb, dtmin=1e-13, dtmax=1e-2, force_dtmin=true)
-    
+      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], reltol=1e-5, abstol=ode_err, max_iters=1e5, callback=cb, dtmin=1e-13, dtmax=1e-2, force_dtmin=true)
+    end
+
     # Solve the ODEproblem
     sol = solve(prob, Vern6(), saveat=saveat)
     # sol = solve(prob, lsoda(), saveat=saveat)
@@ -239,9 +313,11 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps::Int, Mvars::Array, Numer
     dr_dt = nothing;
     GC.gc();
     
-    
-    return x_reshaped, v_reshaped, dt, fail_indx
-    
+    if make_tree
+      return x_reshaped, v_reshaped, dt, fail_indx, cut_short
+    else
+      return x_reshaped, v_reshaped, dt, fail_indx
+    end
 end
 
 
@@ -286,6 +362,18 @@ function hamiltonian(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=true, 
     
     return Ham
 end
+
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+function hamiltonian_axion(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS, mass_axion; iso=true, melrose=false)
+    g_tt, g_rr, g_thth, g_pp = g_schwartz(x, Mass_NS);
+    ksqr = g_tt .* erg.^2 .+ g_rr .* k[:, 1].^2 .+ g_thth .* k[:, 2].^2 .+ g_pp .* k[:, 3].^2
+    
+    # Why factor 1/2 ??
+    Ham = 0.5 .* ksqr .+ mass_axion
+
+    return Ham
+end
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 function k_norm_Cart(x0, khat,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; melrose=false)
     r_s0 = 2.0 * Mass_NS * GNew / c_km^2
@@ -824,7 +912,7 @@ function kNR_e(x, k, ω, t, θm, ωPul, B0, rNS, gammaF)
 
     
     # abs not necessary, but can make calculation easier (numerical error can creap at lvl of 1e-16 for ctheta)
-    return sqrt.((ω.^2 .-  ωp.^2))
+    return sqrt.(abs.(ω.^2 .-  ωp.^2))
 end
 
 function ωGam(x, k, t, θm, ωPul, B0, rNS, gammaF)
@@ -969,298 +1057,6 @@ function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS)
 end
 
 
-
-end
-
-
-
-
-
-function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, gammaF, batchsize; flat=true, isotropic=false, melrose=false, ode_err=1e-5, cutT=100000, fix_time=Nothing, CLen_Scale=true, file_tag="", ntimes=1000, v_NS=[0 0 0], rho_DM=0.3, save_more=false, vmean_ax=220.0, ntimes_ax=10000, dir_tag="results")
-
-
-    # axion mass [eV], axion-photon coupling [1/GeV], misalignment angle (rot-B field) [rad], rotational freq pulars [1/s]
-    # magnetic field strengh at surface [G], radius NS [km], mass NS [solar mass], dispersion relations
-    # number of axion trajectories to generate
-    
-    
-
-    RT = RayTracerGR; # define ray tracer module
-
-    # This next part is out-dated and irrelevant (haven't removed because i have to re-write functions)
-    # ~~~~~~~~~
-    
-    func_use = RT.ωNR_e
-    func_use_SPHERE = RT.ωSimple_SPHERE
-
-
-    # Identify the maximum distance of the conversion surface from NS
-    maxR = RT.Find_Conversion_Surface(Mass_a, fix_time, θm, ωPul, B0, rNS, 1, false)
-    maxR_tag = "";
-
-    # check if NS allows for conversion
-    if maxR < rNS
-        print("Too small Max R.... quitting.... \n")
-        omegaP_test = RT.GJ_Model_ωp_scalar(rNS .* [sin.(θm) 0.0 cos.(θm)], 0.0, θm, ωPul, B0, rNS);
-        print("Max omegaP found... \t", omegaP_test, "Max radius found...\t", maxR, "\n")
-        return
-    end
-
-
-    photon_trajs = 1
-    desired_trajs = Ntajs
-    # assumes desired_trajs large!
-    save_more=true;
-    if save_more
-        SaveAll = zeros(desired_trajs * 2, 18);
-    else
-        SaveAll = zeros(desired_trajs * 2, 11);
-    end
-    f_inx = 0;
-
-    # define arrays that are used in surface area sampling
-    tt_ax = LinRange(-2*maxR, 2*maxR, ntimes_ax); # Not a real physical time -- just used to get trajectory crossing
-    t_diff = tt_ax[2] - tt_ax[1];
-    tt_ax_zoom = LinRange(-2*t_diff, 2*t_diff, ntimes_ax);
-
-    # define min and max time to propagate photons
-    ln_t_start = -22;
-    ln_t_end = log.(1 ./ ωPul);
-    NumerPass = [ln_t_start, ln_t_end, ode_err];
-    ttΔω = exp.(LinRange(ln_t_start, ln_t_end, ntimes));
-
-    if fix_time != Nothing
-        file_tag *= "_fixed_time_"*string(fix_time);
-    end
-
-    file_tag *= "_odeErr_"*string(ode_err);
-    
-    file_tag *= "_vxNS_"*string(v_NS[1]);
-    file_tag *= "_vyNS_"*string(v_NS[2]);
-    file_tag *= "_vzNS_"*string(v_NS[3]);
-    if (v_NS[1] == 0)&&(v_NS[1] == 0)&&(v_NS[1] == 0)
-        phaseApprox = true;
-    else
-        phaseApprox = false;
-    end
-    vNS_mag = sqrt.(sum(v_NS.^2));
-    if vNS_mag .> 0
-        vNS_theta = acos.(v_NS[3] ./ vNS_mag);
-        vNS_phi = atan.(v_NS[2], v_NS[1]);
-    end
-    
-    # init some arrays
-    t0_ax = zeros(batchsize);
-    xpos_flat = zeros(batchsize, 3);
-    R_sample = zeros(batchsize);
-    mcmc_weights = zeros(batchsize);
-    filled_positions = false;
-    fill_indx = 1;
-    Ncx_max = 1;
-    
-    while photon_trajs < desired_trajs
-        # First part of code here is just written to generate evenly spaced samples of conversion surface
-        while !filled_positions
-            xv, Rv, numV, weights = RT.find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS)
-            f_inx += 2;
-            
-            if numV == 0
-                continue
-            end
-            
-            # for i in 1:1
-            for i in 1:numV # Keep more?
-                if weights[i] .> Ncx_max
-                    Ncx_max = weights[i]
-                end
-                if fill_indx <= batchsize
-
-                    xpos_flat[fill_indx, :] .= xv[i, :];
-                    R_sample[fill_indx] = Rv[i];
-                    mcmc_weights[fill_indx] = weights[i];
-                    fill_indx += 1
-                    
-                end
-            end
-            
-            if fill_indx > batchsize
-                filled_positions = true
-                fill_indx = 1
-                f_inx -= 1;
-            end
-        end
-        filled_positions = false;
-        
- 
-        
-        vIfty = erfinv.(2 .* rand(batchsize, 3) .- 1.0) .* vmean_ax .+ v_NS # km /s
-        rmag = sqrt.(sum(xpos_flat.^ 2, dims=2));
-        vmag = sqrt.(2 * GNew .* Mass_NS ./ rmag) ; # km/s
-        
-        newV = zeros(length(rmag), 3)
-        jacVs = zeros(length(rmag))
-        
-        ϕ = atan.(view(xpos_flat, :, 2), view(xpos_flat, :, 1))
-        θ = acos.(view(xpos_flat, :, 3)./ rmag)
-        for i in 1:length(rmag)
-            found = false
-            cnt_careful= 0
-            while !found
-                vGu = rand()
-                velV, accur = RT.solve_vel_CS(θ[i], ϕ[i], rmag[i], vIfty[i,:] ./ 2.998e5, guess=[vGu vGu vGu], errV=1e-20)
-                if accur .< 1e-4
-                    newV[i, :] .= velV[1, :]
-                    jacVs[i] = RT.jacobian_fv(xpos_flat[i, :], velV)
-                    found = true
-                end
-                cnt_careful += 1
-                if cnt_careful > 50
-                    print("failing here at pt 1....")
-                    break;
-                end
-            end
-
-        end
-        newV ./= sqrt.(sum(newV .^ 2, dims=2));
-        
-        
-        
-#        # resample angle (this will be axion velocity at conversion surface)
-#        θi = acos.(1.0 .- 2.0 .* rand(length(rmag)));
-#        ϕi = rand(length(rmag)) .* 2π;
-#        newV = [sin.(θi) .* cos.(ϕi) sin.(θi) .* sin.(ϕi) cos.(θi)];
-        
-        
-        # define angle between surface normal and velocity
-        calpha = RT.surfNorm(xpos_flat, newV, [func_use, [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS]], return_cos=true); # alpha
-        weight_angle = abs.(calpha);
-
-        # sample asymptotic velocity
-        
-        vIfty_mag = sqrt.(sum(vIfty.^2, dims=2));
-        vel_eng = sum((vIfty ./ 2.998e5).^ 2, dims = 2) ./ 2;
-        gammaA = 1 ./ sqrt.(1.0 .- (vIfty_mag ./ c_km).^2 )
-        erg_inf_ini = Mass_a .* sqrt.(1 .+ (vIfty_mag ./ c_km .* gammaA).^2)
-        
-        # define initial momentum (magnitude)
-        k_init = RT.k_norm_Cart(xpos_flat, newV,  0.0, erg_inf_ini, θm, ωPul, B0, rNS, Mass_NS, melrose=melrose)
-        MagnetoVars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, erg_inf_ini, flat, isotropic, melrose] # θm, ωPul, B0, rNS, gamma factors, Time = 0, mass_ns, erg ax
-        
-        # send to ray tracer
-        # note, some rays pass through NS, these get removed internally (so need to redefine some stuff)
-        xF, kF, tF, fail_indx = RT.propagate(func_use_SPHERE, xpos_flat, k_init, ntimes, MagnetoVars, NumerPass);
-        
-        
-        
-        vmag_tot = sqrt.(vmag .^ 2 .+ vIfty_mag.^2); # km/s
-        Bvec, ωp = RT.GJ_Model_vec(xpos_flat, zeros(batchsize), θm, ωPul, B0, rNS);
-        Bmag = sqrt.(sum(Bvec .* Bvec, dims=2))
-        cθ = sum(newV .* Bvec, dims=2) ./ Bmag
-
-        erg_ax = erg_inf_ini ./ sqrt.(1.0 .- 2 * GNew .* Mass_NS ./ rmag ./ c_km.^2 );
-        B_tot = Bmag .* (1.95e-20) ; # GeV^2
-        
-        MagnetoVars =  [θm, ωPul, B0, rNS, [1.0 1.0], zeros(batchsize), erg_ax]
-        sln_δk = RT.dk_ds(xpos_flat, k_init, [func_use, MagnetoVars]);
-        conversion_F = sln_δk ./  (6.58e-16 .* 2.998e5) # 1/km^2;
-        
-
-        # compute conversion prob
-        Prob_nonAD = π ./ 2 .* (Ax_g .* B_tot) .^2 ./ conversion_F .* (1e9 .^2) ./ (vmag_tot ./ 2.998e5) .^2 ./ ((2.998e5 .* 6.58e-16) .^2) ./ sin.(acos.(cθ)).^4; #unitless
-        Prob = (1.0 .- exp.(-Prob_nonAD));
-
-        # phase space factors, first assumes vNS = 0, second more general but needs more samples
-        if phaseApprox
-            phaseS = (π .* maxR .* R_sample .* 2.0) .* rho_DM .* Prob ./ Mass_a .* (vmag_tot ./ c_km) .^ 2 ./ sqrt.(sum( (vIfty ./ c_km) .^ 2, dims=2))
-        else
-            phaseS = (π .* maxR .* R_sample .* 2.0) .* rho_DM .* Prob ./ Mass_a
-            phaseS .*= jacVs
-            # vmag is vmin [km/s]
-            # vmag_tot is v [km/s]
-#            rhat = xpos_flat ./ sqrt.(sum(xpos_flat.^2, dims=2));
-#            vnear = vvec_flat .* vmag_tot;
-#            vinf_mag = sqrt.(sum( (vIfty) .^ 2, dims=2));
-#            vinf_gf = (vinf_mag.^2 .* vnear .+ vinf_mag .* vmag.^2 ./ 2 .* rhat .- vinf_mag .* vnear .* sum(vnear .* rhat, dims=2)) ./ (vinf_mag.^2 .+ vmag.^2 ./ 2 .- vinf_mag .* sum(vnear .* rhat, dims=2))
-
-#            phaseS .*= vmag_tot.^2 .* exp.(- sum((vinf_gf .- v_NS).^2, dims=2) ./ vmean_ax.^2 ) ./ (sqrt.(vmag_tot.^2 .- vmag.^2) .* exp.(- sum((vIfty .- v_NS).^2, dims=2) ./ vmean_ax.^2)) ./ c_km
-        end
-        
-        sln_prob = weight_angle .* phaseS .* (1e5 .^ 2) .* c_km .* 1e5 .* mcmc_weights .* fail_indx ; # photons / second
-
-        # archaic re definition from old feature that has been removed
-        sln_k = k_init;
-        sln_x = xpos_flat;
-        sln_vInf = vel_eng ;
-        sln_t = zeros(batchsize);
-        sln_ConVL = sqrt.(π ./ conversion_F);
-
-
-        # extract final angle in sky and photon direction
-        ϕf = atan.(view(kF, :, 2, ntimes), view(kF, :, 1, ntimes));
-        ϕfX = atan.(view(xF, :, 2, ntimes), view(xF, :, 1, ntimes));
-        θf = acos.(view(kF, :, 3, ntimes) ./ sqrt.(sum(view(kF, :, :, ntimes) .^2, dims=2)));
-        θfX = acos.(view(xF, :, 3, ntimes) ./ sqrt.(sum(view(xF, :, :, ntimes) .^2, dims=2)));
-
-        # compute energy dispersion (ωf - ωi) / ωi
-        MagnetoVars =  [θm, ωPul, B0, rNS, [1.0 1.0], zeros(batchsize)]
-        passA = [func_use, MagnetoVars];
-        Δω = tF[:, end] ./ Mass_a .+ vel_eng[:];
-        
-        # comptue optical depth, for now not needed
-#        opticalDepth = RT.tau_cyc(xF, kF, ttΔω, passA, Mass_a);
-        opticalDepth = zeros(length(sln_prob))
-
-        # should we apply Lc cut?
-        num_photons = length(ϕf)
-        passA2 = [func_use, MagnetoVars, Mass_a];
-        # this is hand set to off for now
-        CLen_Scale = false
-        if CLen_Scale
-            weightC = ConvL_weights(xF, kF, vmag_tot ./ c_km, ttΔω, sln_ConVL, passA2)
-        else
-            weightC = ones(num_photons)
-        end
-        
-        # cut out spurious features from high Lc cut
-        weightC[weightC[:] .> 1.0] .= 1.0;
-        
-        # Save info
-        SaveAll[photon_trajs:photon_trajs + num_photons - 1, 1] .= view(θf, :); # final momentum theta
-        SaveAll[photon_trajs:photon_trajs + num_photons - 1, 2] .= view(ϕf,:); # final momentum phi
-        SaveAll[photon_trajs:photon_trajs + num_photons - 1, 3] .= view(θfX, :); # final position theta
-        SaveAll[photon_trajs:photon_trajs + num_photons - 1, 4] .= view(ϕfX, :); # final position phi
-        SaveAll[photon_trajs:photon_trajs + num_photons - 1, 5] .= sqrt.(sum(xF[:, :, end] .^2, dims=2))[:]; # final distance NS
-        SaveAll[photon_trajs:photon_trajs + num_photons - 1, 6] .= sln_prob[:] .* weightC .^ 2 .* exp.(-opticalDepth[:]); #  num photons / second
-        SaveAll[photon_trajs:photon_trajs + num_photons - 1, 7] .= Δω[:]; # (ωf - ωi) / ωi
-        SaveAll[photon_trajs:photon_trajs + num_photons - 1, 8] .= sln_ConVL[:]; # conversion length
-        SaveAll[photon_trajs:photon_trajs + num_photons - 1, 9] .= xpos_flat[:, 1]; # initial x
-        SaveAll[photon_trajs:photon_trajs + num_photons - 1, 10] .= xpos_flat[:, 2]; # initial y
-        SaveAll[photon_trajs:photon_trajs + num_photons - 1, 11] .= xpos_flat[:, 3]; # initial z
-        if save_more
-            SaveAll[photon_trajs:photon_trajs + num_photons - 1, 12] .= k_init[:, 1]; # initial kx
-            SaveAll[photon_trajs:photon_trajs + num_photons - 1, 13] .= k_init[:, 2]; # initial ky
-            SaveAll[photon_trajs:photon_trajs + num_photons - 1, 14] .= k_init[:, 3]; # initial kz
-            SaveAll[photon_trajs:photon_trajs + num_photons - 1, 15] .= opticalDepth[:]; # optical depth
-            SaveAll[photon_trajs:photon_trajs + num_photons - 1, 16] .= weightC[:]; # Lc weight
-            SaveAll[photon_trajs:photon_trajs + num_photons - 1, 17] .= Prob[:]; # optical depth
-            SaveAll[photon_trajs:photon_trajs + num_photons - 1, 18] .= calpha[:]; # surf norm angle
-        end
-        
-        photon_trajs += num_photons;
-        
-        
-        GC.gc();
-    end
-
-    
-    # cut out unused elements
-    SaveAll = SaveAll[SaveAll[:,6] .> 0, :];
-    SaveAll[:,6] ./= (float(f_inx) .* float(Ncx_max)); # divide off by N trajectories sampled
-
-    fileN = "results/Fast_Trajectories_MassAx_"*string(Mass_a)*"_AxionG_"*string(Ax_g)*"_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0);
-    fileN *= "_Ax_trajs_"*string(Ntajs);
-    fileN *= "_N_Times_"*string(ntimes)*"_"*file_tag*"_.npz";
-    npzwrite(fileN, SaveAll)
 
 end
 

@@ -5,8 +5,12 @@ using NPZ
 using Dates
 using Statistics
 using Base
+using Random
 #using Profile
 include("RayTracer.jl")
+include("MainRunner.jl")
+
+
 
 function parse_commandline()
     s = ArgParseSettings()
