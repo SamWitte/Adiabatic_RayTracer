@@ -123,9 +123,11 @@ mutable struct node
   ky
   kz
   species # Axion or photon?
-  #prob    # Conversion probability
+  #prob   # Conversion probability
   weight
   parent_weight
+  level_crossings
+  traj    # Used to store entire trajectory, not used normally
 end
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

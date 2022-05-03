@@ -13,6 +13,44 @@ function printTree(n::Array)
     print("\n")
 end
 
+function saveTree(n::Array, filename::String="tree.txt")
+    open(filename, "w") do f
+      for i in 1:length(n)
+        write(f, n[i].species, " ", string(n[i].weight), " ",
+              string(n[i].parent_weight), "\n")
+        if length(n[i].level_crossings) > 0
+          for j in 1:length(n[i].level_crossings)
+            write(f, " ", string(n[i].level_crossings[j]))
+          end
+        else
+          write(f, "-")
+        end
+        write(f, "\n")
+        if length(n[i].traj) > 0
+          for j in 1:length(n[i].traj[:, 1])
+            write(f, " ", string(n[i].traj[j, 1]))
+          end
+          write(f, "\n")
+          for j in 1:length(n[i].traj[:, 2])
+            write(f, " ", string(n[i].traj[j, 2]))
+          end
+          write(f, "\n")
+          for j in 1:length(n[i].traj[:, 3])
+            write(f, " ", string(n[i].traj[j, 3]))
+          end
+          write(f, "\n")
+        else
+          write(f, string(n[i].x))
+          write(f, "\n")
+          write(f, string(n[i].y))
+          write(f, "\n")
+          write(f, string(n[i].z))
+          write(f, "\n")
+        end
+      end 
+    end
+end
+
 function get_Prob_nonAD(pos::Array, kpos::Array,
     Mass_a,Ax_g,θm,ωPul,B0,rNS,erg_inf_ini,vIfty_mag)
 
@@ -57,21 +95,23 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     k0 = [event.kx event.ky event.kz]
 
     # propagate photon or axion
+    num_cutoff = 3 # The splitting at which the ODE stops
     if event.species == "photon"
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose]
       x_e, k_e, t_e, err_e, cut_short = RT.propagate(func_use_SPHERE, pos0, k0,
-                      1000, Mvars, NumerPass, RT.func!,
-                      true, false, Mass_a, 3)
+                      5000, Mvars, NumerPass, RT.func!,
+                      true, false, Mass_a, num_cutoff)
     else      
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose, Mass_a]
       x_e, k_e, t_e, err_e, cut_short = RT.propagate(func_use_SPHERE, pos0, k0,
-                        1000, Mvars, NumerPass, RT.func_axion!,
-                        true, true, Mass_a, 3)
+                        5000, Mvars, NumerPass, RT.func_axion!,
+                        true, true, Mass_a, num_cutoff)
     end
     pos = transpose(x_e[1, :, :])
     kpos = transpose(k_e[1, :, :])
+    event.traj = pos
 
     # find level crossings
     logdiff = (log.(RT.GJ_Model_ωp_vec(pos, 0.0, θm, ωPul, B0, rNS))
@@ -95,6 +135,8 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
       popfirst!(cxing_st.weight)
     end
         
+    event.level_crossings = cxing_st.i1
+
     xpos = RT.apply(cxing_st,  pos[:, 1])
     ypos = RT.apply(cxing_st,  pos[:, 2])
     zpos = RT.apply(cxing_st,  pos[:, 3])
@@ -124,15 +166,16 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     # Add all crossings to the tree
     for j in 1:length(xpos) 
 
-      if Prob[j]*event.weight > 1e-5 # Cutoff
+      if Prob[j]*event.weight > -100 # Cutoff
         push!(events, RT.node(xpos[j], ypos[j], zpos[j], kx[j], ky[j],
-               kz[j], new_species, Prob[j]*event.weight, event.weight))
+                    kz[j], new_species, Prob[j]*event.weight, event.weight, [],
+                    []))
       else
         # Note: species with star (*) has not been propagated and can
         # in principle convert
         push!(tree, RT.node(xpos[j], ypos[j], zpos[j], kx[j], ky[j],
               kz[j], new_species * "*",
-              Prob[j]*event.weight, event.weight))
+              Prob[j]*event.weight, event.weight, [], []))
       end
 
       # Re-evaluate weight of parent
@@ -142,10 +185,6 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     push!(tree, event)
 
   end
-
-  # > Propagate axion backwards in time
-  #xF, kF, tF, fail_indx = RT.propagate(func_use_SPHERE, xpos_flat,
-  #k_init, ntimes, MagnetoVars, NumerPass)
 
   return tree
 
@@ -306,17 +345,21 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         # to-do: 
         #  - do not recompute parent
         #  - reduced effective mass of NS when the axion passes through
-        #  - add test for conversion surface in ODE solver to stop early
+        #  - use "conditions" in ODE to find level crossings
+        #    and not interpolation of the path
+        #  - Check physics of EoM backwards in time
+        #  - Check physics of EoM of axion
         for i in 1:batchsize
           parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
                 k_init[i, 1], k_init[i, 2], k_init[i, 3],
-                "photon", 1.0, -1.0)
+                "photon", 1.0, -1.0, [], [])
                                # Parent weight: -1 indicates first
           print(i, " forward in time\n---------------------\n")
           tree = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
                 flat,isotropic,melrose,NumerPass)
           printTree(tree)
+          saveTree(tree, "results/forward_" * string(i))
 
 
 
@@ -324,12 +367,13 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
           # Backwards in time equivalent to setting k->-k and vecB->-vecB (???)
           parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
                 -k_init[i, 1], -k_init[i, 2], -k_init[i, 3],
-                "axion", 1.0, -1.0)
+                "axion", 1.0, -1.0, [], [])
           tree_backwards = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
                 flat,isotropic,melrose,NumerPass)
           printTree(tree_backwards)    
-    
+          saveTree(tree_backwards, "results/backward_" * string(i))
+
         end
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         
