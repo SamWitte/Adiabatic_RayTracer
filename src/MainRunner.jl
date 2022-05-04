@@ -18,12 +18,20 @@ function saveTree(n::Array, filename::String="tree.txt")
       for i in 1:length(n)
         write(f, n[i].species, " ", string(n[i].weight), " ",
               string(n[i].parent_weight), "\n")
-        if length(n[i].level_crossings) > 0
-          for j in 1:length(n[i].level_crossings)
-            write(f, " ", string(n[i].level_crossings[j]))
+        if length(n[i].level_crossings_x) > 0
+          for j in 1:length(n[i].level_crossings_x)
+            write(f, " ", string(n[i].level_crossings_x[j]))
+          end
+          write(f, "\n")
+          for j in 1:length(n[i].level_crossings_y)
+            write(f, " ", string(n[i].level_crossings_y[j]))
+          end
+          write(f, "\n")
+          for j in 1:length(n[i].level_crossings_z)
+            write(f, " ", string(n[i].level_crossings_z[j]))            
           end
         else
-          write(f, "-")
+          write(f, "-\n-\n-")
         end
         write(f, "\n")
         if length(n[i].traj) > 0
@@ -81,10 +89,19 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,flat,isotropic,melrose,
     NumerPass)
 
+  # Accuracy parameters 
+  # -------------------
+  tot_prob_cutoff = 1 - 1e-7
+  num_cutoff = 2 # The splitting at which the ODE stops
+  # ^^^^^^^^^^^^^^^^^^^
+
+
   batchsize = 1 # Only one parent photon
 
   events = [first]
   tree = []
+
+  tot_prob = 0 # Total probability in tree
 
   while length(events) > 0
     
@@ -94,60 +111,91 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     pos0 = [event.x event.y event.z]
     k0 = [event.kx event.ky event.kz]
 
+    # DEBUG
+    print(event.species, " ", event.weight, " ",
+          tot_prob, " ", sum(pos0.^2), "\n")
+
     # propagate photon or axion
-    num_cutoff = 3 # The splitting at which the ODE stops
     if event.species == "photon"
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose]
-      x_e, k_e, t_e, err_e, cut_short = RT.propagate(func_use_SPHERE, pos0, k0,
-                      5000, Mvars, NumerPass, RT.func!,
+      x_e, k_e, t_e, err_e, cut_short, xc, yc, zc, kxc, kyc, kzc = RT.propagate(
+                      func_use_SPHERE, pos0, k0,
+                      1000, Mvars, NumerPass, RT.func!,
                       true, false, Mass_a, num_cutoff)
     else      
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose, Mass_a]
-      x_e, k_e, t_e, err_e, cut_short = RT.propagate(func_use_SPHERE, pos0, k0,
-                        5000, Mvars, NumerPass, RT.func_axion!,
+      x_e, k_e, t_e, err_e, cut_short, xc, yc, zc, kxc, kyc, kzc = RT.propagate(
+                        func_use_SPHERE, pos0, k0,
+                        1000, Mvars, NumerPass, RT.func_axion!,
                         true, true, Mass_a, num_cutoff)
     end
     pos = transpose(x_e[1, :, :])
     kpos = transpose(k_e[1, :, :])
     event.traj = pos
 
-    # find level crossings
-    logdiff = (log.(RT.GJ_Model_ωp_vec(pos, 0.0, θm, ωPul, B0, rNS))
-               .- log.(Mass_a))
-    cxing_st = RT.get_crossings(logdiff)
 
-    if length(cxing_st.i1) <= 1  # No crossings
-      if length(cxing_st.i1) == 0
+    if length(xc) < 1  # No crossings
         push!(tree, event)
+        tot_prob += event.weight
         continue
-      end
-      if cxing_st.i1[1] == 1
-        push!(tree, event)
-        continue
+    end
+
+
+    if any(abs.(kxc) .> 1) || any(abs.(kyc) .> 1) || any(abs.(kzc) .> 1)
+      print("A rare fail occured, and I do not know why...\n")
+      print("   xc:   ", xc, "\n")
+      print("   yc:   ", yc, "\n")
+      print("   zc:   ", zc, "\n")
+      print("   kxc:  ", kxc, "\n")
+      print("   kyc:  ", kyc, "\n")
+      print("   kzc:  ", kzc, "\n")
+      push!(tree, event)
+      tot_prob += event.weight
+      continue
+    end
+
+    # If two crossings are close, it is likely only one crossing
+    # This happens (likely only) close to the neutron star surface (WHY??) 
+    if length(xc) > 1
+      epsabs = 1e-4 # ... as ode_err 
+      r = sqrt.(xc.^2 + yc.^2 + zc.^2)
+      tmp = sqrt.(abs.(diff(xc)).^2 .+ abs.(diff(yc)).^2 .+ abs.(diff(zc)).^2)
+      if any(tmp .< epsabs)
+        flag = push!((tmp .> epsabs), 1)
+        print("Two crossings occur at the same point. Deleting one of them\n")
+        print(sqrt.(xc.^2 + yc.^2 + zc.^2), "\n")
+        xc = xc[flag]
+        yc = yc[flag]
+        zc = zc[flag]
+        kxc = kxc[flag]
+        kyc = kyc[flag]
+        kzc = kzc[flag]
+        print(sqrt.(xc.^2 + yc.^2 + zc.^2), "\n")
       end
     end
-  
-    if cxing_st.i1[1] == 1 # Remove start if present (Rounding error?)
-      popfirst!(cxing_st.i1)
-      popfirst!(cxing_st.i2)
-      popfirst!(cxing_st.weight)
-    end
-        
-    event.level_crossings = cxing_st.i1
 
-    xpos = RT.apply(cxing_st,  pos[:, 1])
-    ypos = RT.apply(cxing_st,  pos[:, 2])
-    zpos = RT.apply(cxing_st,  pos[:, 3])
-    kx = RT.apply(cxing_st,  kpos[:, 1])
-    ky = RT.apply(cxing_st,  kpos[:, 2])
-    kz = RT.apply(cxing_st,  kpos[:, 3])
-    Nc = length(xpos)
+    # find level crossings OLD
+    #logdiff = (log.(RT.GJ_Model_ωp_vec(pos, 0.0, θm, ωPul, B0, rNS))
+    #           .- log.(Mass_a))
+    #cxing_st = RT.get_crossings(logdiff)
+    #xpos = RT.apply(cxing_st,  pos[:, 1])
+    #ypos = RT.apply(cxing_st,  pos[:, 2])
+    #zpos = RT.apply(cxing_st,  pos[:, 3])
+    #kx = RT.apply(cxing_st,  kpos[:, 1])
+    #ky = RT.apply(cxing_st,  kpos[:, 2])
+    #kz = RT.apply(cxing_st,  kpos[:, 3])
+    
+    Nc = length(xc)
     pos = zeros(Nc, 3);
-    pos[:, 1] .= xpos; pos[:, 2] .= ypos; pos[:, 3] .= zpos
+    pos[:, 1] .= xc; pos[:, 2] = yc; pos[:, 3] = zc
     kpos = zeros(Nc, 3);
-    kpos[:, 1] .= kx; kpos[:, 2] .= ky; kpos[:, 3] .= kz
+    kpos[:, 1] .= kxc; kpos[:, 2] .= kyc; kpos[:, 3] .= kzc
+    
+    event.level_crossings_x = xc
+    event.level_crossings_y = yc
+    event.level_crossings_z = zc
 
 
     # Conversion probability
@@ -164,25 +212,35 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     end
 
     # Add all crossings to the tree
-    for j in 1:length(xpos) 
-
-      if Prob[j]*event.weight > -100 # Cutoff
-        push!(events, RT.node(xpos[j], ypos[j], zpos[j], kx[j], ky[j],
-                    kz[j], new_species, Prob[j]*event.weight, event.weight, [],
-                    []))
-      else
+    for j in 1:Nc 
+    
+      #if Prob[j]*event.weight > 1e-10 # Cutoff
+        push!(events, RT.node(xc[j], yc[j], zc[j], kxc[j], kyc[j],
+                    kzc[j], new_species, Prob[j]*event.weight, event.weight, [],
+                    [], [], []))
+      #else
         # Note: species with star (*) has not been propagated and can
         # in principle convert
-        push!(tree, RT.node(xpos[j], ypos[j], zpos[j], kx[j], ky[j],
-              kz[j], new_species * "*",
-              Prob[j]*event.weight, event.weight, [], []))
-      end
+      #  push!(tree, RT.node(xc[j], yc[j], zc[j], kxc[j], kyc[j],
+      #        kzc[j], new_species * "*",
+      #        Prob[j]*event.weight, event.weight, [], [], [], []))
+      #end
 
       # Re-evaluate weight of parent
       event.weight = event.weight*(1-Prob[j])
     end
 
+    # Add to tree
     push!(tree, event)
+    tot_prob += event.weight
+    
+    # Cutoff
+    if tot_prob >= tot_prob_cutoff
+      break
+    end
+
+    # Sort events to consider the most likely first
+    sort!(events, by = events->events.weight)
 
   end
 
@@ -204,6 +262,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
       print("Using seed ", iseed, "\n")
       Random.seed!(iseed)
     end
+
 
     # axion mass [eV], axion-photon coupling [1/GeV], misalignment angle (rot-B field) [rad], rotational freq pulars [1/s]
     # magnetic field strengh at surface [G], radius NS [km], mass NS [solar mass], dispersion relations
@@ -352,7 +411,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         for i in 1:batchsize
           parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
                 k_init[i, 1], k_init[i, 2], k_init[i, 3],
-                "photon", 1.0, -1.0, [], [])
+                "photon", 1.0, -1.0, [], [], [], [])
                                # Parent weight: -1 indicates first
           print(i, " forward in time\n---------------------\n")
           tree = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
@@ -367,7 +426,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
           # Backwards in time equivalent to setting k->-k and vecB->-vecB (???)
           parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
                 -k_init[i, 1], -k_init[i, 2], -k_init[i, 3],
-                "axion", 1.0, -1.0, [], [])
+                "axion", 1.0, -1.0, [], [], [], [])
           tree_backwards = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
                 flat,isotropic,melrose,NumerPass)

@@ -126,7 +126,9 @@ mutable struct node
   #prob   # Conversion probability
   weight
   parent_weight
-  level_crossings
+  level_crossings_x
+  level_crossings_y
+  level_crossings_z
   traj    # Used to store entire trajectory, not used normally
 end
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -147,7 +149,6 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     if flat
         Mass_NS = 0.0;
     end
-    
     
     # Define the Schwarzschild radius of the NS (in km)
     r_s0 = 2.0 * Mass_NS * GNew / c_km^2
@@ -215,30 +216,69 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     # Stop integration when a given number of level crossings is achieved
     # Multiple callbacks -> CallbackSet
-
-    # 75     logdiff = (log.(RT.GJ_Model_ωp_vec(pos, 0.0, θm, ωPul, B0, rNS))             
-    # 76                .- log.(Mass_a))                                                  
-    # 77     cxing_st = RT.get_crossings(logdiff)
-
     if make_tree
-      cut_short = false
-      function condition(u, lnt, integrator)
-        (log.(GJ_Model_ωp_vec(u, 0.0, θm, ωPul, B0, rNS)) .- log.(Mass_a))[1]
-      end
 
-      function affect!(integrator)
-          integrator.opts.userdata[:callback_count] +=1
-          if integrator.opts.userdata[:callback_count] ==
-                        integrator.opts.userdata[:max_count]
+      cut_short = false
+      
+      # Store crossings to be used later
+      xc = []; yc = []; zc = []
+      kxc = []; kyc = []; kzc = []
+
+      # Cut after given amount of crossings
+      function condition(u, lnt, integrator)
+        return (log.(GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS))
+                .- log.(Mass_a))[1]
+      end
+      function affect!(i)
+
+          if i.opts.userdata[:callback_count] == 0
+            # If i.u has not changes, it is not a new crossings...
+            s = 1.0001
+            pos = [sin(i.u[2])*cos(i.u[3]) sin(i.u[2])*sin(i.u[3]) cos(i.u[2])]
+            pos .*= i.u[1]
+            if ( all(abs.(pos[1:3]) .< abs.(x0[1:3]).*s) &&
+                 all(abs.(pos[1:3]) .> abs.(x0[1:3])./s) )
+              return
+            end
+          end
+
+          # Store crossing
+          #                 Cartesian
+          push!( xc, i.u[1]*sin(i.u[2])*cos(i.u[3]) )
+          push!( yc, i.u[1]*sin(i.u[2])*sin(i.u[3]) )
+          push!( zc, i.u[1]*cos(i.u[2]) )
+
+          # Compute proper velocity
+          r_s = 2.0 * Mass_NS * GNew / c_km^2
+          ω = 1.0 - r_s / i.u[1]
+          v_pl = [i.u[4]*sqrt(ω)  i.u[5]/i.u[1]  i.u[6]/(i.u[1]*sin(i.u[2]))]
+          v_pl .*= erg[1]*ω
+          v_tmp = sin(i.u[2])*v_pl[1] + cos(i.u[2])*v_pl[2]
+          push!( kxc, cos(i.u[3])*v_tmp   - sin(i.u[3])*v_pl[3] )
+          push!( kyc, sin(i.u[3])*v_tmp   + cos(i.u[3])*v_pl[3] )
+          push!( kzc, cos(i.u[2])*v_pl[1] - sin(i.u[2])*v_pl[2] )
+
+          # Check if we want to stop ODE
+          i.opts.userdata[:callback_count] +=1
+          if i.opts.userdata[:callback_count] == i.opts.userdata[:max_count]
               cut_short = true
-              terminate!(integrator)
+              terminate!(i)
           end
       end
-
-      callback = ContinuousCallback(condition, affect!)
+      # Cut if inside a neutron star (and a photon). 
+      condition_r(u,lnt,integrator) = u[1] < (rNS + 1e-2)
+      affect_r!(integrator) = terminate!(integrator)
+     
+      cb_s = ContinuousCallback(condition, affect!)
+      cb_r = DiscreteCallback(condition_r, affect_r!)
+      #if is_axion
+      #  cbset = CallbackSet(cb, cb_s)
+      #else
+        cbset = CallbackSet(cb, cb_s, cb_r)
+      #end
 
       prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], reltol=1e-5, abstol=ode_err,
-                   max_iters=1e5, callback=CallbackSet(cb, callback),
+                   max_iters=1e5, callback=cbset,
                    userdata=Dict(:callback_count=>0, :max_count=>max_crossings),
                    #max_iters=1e5, callback=callback,
                    dtmin=1e-13, dtmax=1e-2, force_dtmin=true)
@@ -276,7 +316,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     x = [[sol.u[i][:,1] .* sin.(sol.u[i][:,2]) .* cos.(sol.u[i][:,3])  sol.u[i][:,1] .* sin.(sol.u[i][:,2]) .* sin.(sol.u[i][:,3])  sol.u[i][:,1] .* cos.(sol.u[i][:,2])] for i in 1:length(sol.u)]
 
     
-    v = [[cos.(sol.u[i][:,3]) .* (sin.(sol.u[i][:,2]) .* v_pl[i][:,1] .+ cos.(sol.u[i][:,2]) .* v_pl[i][:,2]) .- sin.(sol.u[i][:,2]) .* sin.(sol.u[i][:,3]) .* v_pl[i][:,3] ./ sin.(sol.u[i][:,2]) sin.(sol.u[i][:,3]) .* (sin.(sol.u[i][:,2]) .* v_pl[i][:,1] .+ cos.(sol.u[i][:,2]) .* v_pl[i][:,2]) .+  sin.(sol.u[i][:,2]) .* cos.(sol.u[i][:,3]) .* v_pl[i][:,3] ./ sin.(sol.u[i][:,2]) cos.(sol.u[i][:,2]) .* v_pl[i][:,1] .-  sin.(sol.u[i][:,2]) .* v_pl[i][:,2] ] for i in 1:length(sol.u)]
+    v = [[cos.(sol.u[i][:,3]) .* (sin.(sol.u[i][:,2]) .* v_pl[i][:,1] .+ cos.(sol.u[i][:,2]) .* v_pl[i][:,2]) .- sin.(sol.u[i][:,2]) .* sin.(sol.u[i][:,3]) .* v_pl[i][:,3] ./ sin.(sol.u[i][:,2])  sin.(sol.u[i][:,3]) .* (sin.(sol.u[i][:,2]) .* v_pl[i][:,1] .+ cos.(sol.u[i][:,2]) .* v_pl[i][:,2]) .+ sin.(sol.u[i][:,2]) .* cos.(sol.u[i][:,3]) .* v_pl[i][:,3] ./ sin.(sol.u[i][:,2])   cos.(sol.u[i][:,2]) .* v_pl[i][:,1] .-  sin.(sol.u[i][:,2]) .* v_pl[i][:,2] ] for i in 1:length(sol.u)]
     
     # print(k0,"\t",v[1,:], "\n")
     
@@ -316,9 +356,9 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     GC.gc();
     
     if make_tree
-      return x_reshaped, v_reshaped, dt, fail_indx, cut_short
+      return x_reshaped,v_reshaped,dt,fail_indx,cut_short,xc,yc,zc,kxc,kyc,kzc
     else
-      return x_reshaped, v_reshaped, dt, fail_indx
+      return x_reshaped,v_reshaped,dt,fail_indx
     end
 end
 
