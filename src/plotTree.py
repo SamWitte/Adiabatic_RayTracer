@@ -152,7 +152,6 @@ print("  axion:  ", p_a)
 print("  NS:     ", p_NS)
 
 
-
 """
 def GJ_Model_wp_vec(x, t, θm, ω, B0, rNS)
     # For GJ model, return \omega_p [eV]
@@ -177,8 +176,8 @@ def GJ_Model_wp_vec(x, t, θm, ω, B0, rNS)
     By = Br*sin(theta)*sin(phi)+Btheta*cos(theta)*sin(phi)+Bphi*cos(phi)
     Bz = Br*cos(theta)-Btheta*sin(theta)
     
-    nelec = np.abs((2.0 .* ω .* Bz) ./ sqrt.(4 .* π ./ 137) .* (1.95e-2) .* hbar) ; # eV^3
-    ωp = sqrt.(4 .* π .* nelec ./ 137 ./ 5.0e5);
+    nelec = np.abs((2.0*omega*Bz)/np.sqrt(4*np.pi/137)*1.95e-2*hbar)
+    omegap = np.sqrt(4*np.pi*nelec/137/5.0e5)
 
     return ωp
 """
