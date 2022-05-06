@@ -5,6 +5,40 @@ import matplotlib as mpl
 
 cutoff = 0
 
+
+fontsize = 12
+newparams = {'figure.figsize'        : (5, 4),
+             'font.size'             : fontsize,
+             'mathtext.fontset'      : 'stix',
+             'font.family'           : 'STIXGeneral',
+             'lines.markersize'      : 5,
+             'lines.linewidth'       : 1.5,
+             #'legend.frameon'        : False,
+             #'legend.labelspacing'   : 0.1,
+             #'legend.handletextpad'  : 0.2,
+             #'legend.columnspacing'  : 1,
+             #'legend.borderaxespad'  : 0.2,
+             #'ytick.major.pad'       : 0,
+             #'ytick.minor.pad'       : 0, 
+             #'xtick.major.pad'       : 0,
+             #'xtick.minor.pad'       : 0,
+             #'axes.labelpad'         : -2.0,
+             #'errorbar.capsize'      : 2,
+             'markers.fillstyle'     : "none",
+             'lines.markeredgewidth' : 1,
+             #'lines.markeredgecolor' : "k",
+             'xtick.bottom'          : True,
+             'xtick.top'             : True,
+             'ytick.left'            : True,
+             'ytick.right'           : True,
+             "ytick.direction"       : "in",
+             "xtick.direction"       : "in"
+             }
+plt.rcParams.update(newparams)
+
+rNS = 10
+r_NS = 10
+
 def load_tree(filename):
     tree = []
     with open(filename) as f:
@@ -39,16 +73,23 @@ def load_tree(filename):
                     [float(n) for n in f.readline().strip().split()])
             tree[i]["r"] = (tree[i]["x"]**2 + tree[i]["y"]**2 +
                             tree[i]["z"]**2)**.5
+            tree[i]["NS"] = True if np.min(tree[i]["r"]) < 1.1*r_NS else False
             line = f.readline()
     return tree
 
 
-rNS = 10
 plot = True
+savefig = True
+showfig = True
+runs = range(1, 12)
+#runs = [3]
+
 list_p_naive = [[], [], []]
 list_p_in = [[], [], []]
 list_p_out = [[], [], []]
-for num in range(1, 17):
+list_p_ain_pout = [[], [], []]
+list_p_one_splitting = [[], [], []]
+for num in runs:
 
     print("\n--------- num: %i ---------"%(num))
         
@@ -56,7 +97,7 @@ for num in range(1, 17):
     tree_b = load_tree("results/backward_%i"%(num))
 
     if plot:
-        fig = plt.figure()
+        fig = plt.figure(figsize=(9, 7))
         ax = plt.axes(projection='3d')
 
         x0 = tree[0]["x"][0]
@@ -67,7 +108,7 @@ for num in range(1, 17):
 
         NNN = 100
 
-# Find outermost crossings
+        # Find outermost crossings
         xmin = 1e100; xmax = 1e-100
         ymin = 1e100; ymax = 1e-100
         zmin = 1e100; zmax = 1e-100
@@ -92,22 +133,25 @@ for num in range(1, 17):
         zmax = max(z0, zmax) + add
 
 
-# Do not plot outide limits
+        # Do not plot outide limits if final
         for t in [tree, tree_b]:
             for n in t:
-                flagx = np.logical_or(n["x"]<xmin, n["x"]>xmax)
-                flagy = np.logical_or(n["y"]<ymin, n["y"]>ymax)
-                flagz = np.logical_or(n["z"]<zmin, n["z"]>zmax)
-                i = np.where(np.logical_or(flagx, np.logical_or(flagy, flagz)))
-                n["x"][i] = np.nan
-                n["y"][i] = np.nan
-                n["z"][i] = np.nan
+                if n["final"] and not n["NS"]:
+                    flagx = np.logical_or(n["x"]<xmin, n["x"]>xmax)
+                    flagy = np.logical_or(n["y"]<ymin, n["y"]>ymax)
+                    flagz = np.logical_or(n["z"]<zmin, n["z"]>zmax)
+                    i = np.where(np.logical_not(
+                        np.logical_or(flagx, np.logical_or(flagy, flagz))))
+                    n["x"] = n["x"][i]
+                    n["y"] = n["y"][i]
+                    n["z"] = n["z"][i]
 
-# Forwards in time
+        # Forwards in time
         c = "C0"
 
         cmap = plt.get_cmap("copper").reversed()
         vmin = np.log10(np.min([n["weight"] for n in tree]))
+        vmin = min(vmin, np.log10(np.min([n["weight"] for n in tree_b])))
         print(vmin)
         def get_color(w):
             vmax = 0
@@ -120,20 +164,27 @@ for num in range(1, 17):
             ls = "--" if i["species"][0]=="a" else "-"
             #lc = 100# int(0 if len(i["crossings_x"]) == 0 else i["crossings"][-1])
             #N = min(lc + NNN, len(i["x"]))
-            c = get_color(i["weight"])
+            c = get_color(abs(i["parent_weight"])*i["prob"])
             ax.plot3D(i["x"][:], i["y"][:], i["z"][:], linestyle=ls, color=c)
             ax.plot3D(i["crossings_x"], i["crossings_y"], i["crossings_z"],
-                    linestyle="", marker="*", color="k")
+                    linestyle="", marker="*", color="g")
+            if not i["NS"] and i["final"]:
+                ax.plot3D([i["x"][-1]], [i["y"][-1]], [i["z"][-1]],
+                    linestyle="", marker="s", color="b")
 
         for i in tree_b:
             if i["weight"] < cutoff: continue
             ls = ":" if i["species"][0]=="a" else "-."
             #lc = 100# int(0 if len(i["crossings_x"]) == 0 else i["crossings"][-1])
             #N = min(lc + NNN, len(i["x"]))
-            c = get_color(i["weight"])
+            c = get_color(abs(i["parent_weight"])*i["prob"])
             ax.plot3D(i["x"][:], i["y"][:], i["z"][:], linestyle=ls, color=c)
             ax.plot3D(i["crossings_x"], i["crossings_y"], i["crossings_z"],
-                    linestyle="", marker="*", color="k")
+                    linestyle="", marker="*", color="g")
+            if not i["NS"] and i["final"]:
+                ax.plot3D([i["x"][-1]], [i["y"][-1]], [i["z"][-1]],
+                    linestyle="", marker="^", color="m")
+
 
         u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
         x = rNS*np.cos(u)*np.sin(v)
@@ -148,17 +199,41 @@ for num in range(1, 17):
         sm = plt.cm.ScalarMappable(cmap=cmap)
         sm._A = [0, vmin]
         fig.colorbar(sm, label="Log probability")
+        plt.tight_layout()
+        plt.xlabel(r"$x/r_\mathrm{NS}$")
+        plt.ylabel(r"$y/r_\mathrm{NS}$")
+        ax.set_zlabel(r"$z/r_\mathrm{NS}$")
+        plt.plot([], [], linestyle="", marker="o", color="r",
+                label="Initial conversion")
+        plt.plot([], [], linestyle="", marker="*", color="g",
+                label="Level crossing")
+        plt.plot([], [], linestyle="", marker="s", color="b",
+                label="Escaping particle")
+        plt.plot([], [], linestyle="", marker="^", color="m",
+                label="Approaching particle")
+        plt.plot([], [], linestyle="-", marker="", color="k",
+                label="Photon (forward)")
+        plt.plot([], [], linestyle="--", marker="", color="k",
+                label="Axion (forward)")
+        plt.plot([], [], linestyle="-.", marker="", color="k",
+                label="Photon (backward)")
+        plt.plot([], [], linestyle=":", marker="", color="k",
+                label="Axion (backward)")
 
+        plt.legend()
+        if savefig: plt.savefig("figures/%i.pdf"%(num)) 
+
+    # Play around with statistics!
 
     p0 = tree[0]["prob"]
 
-
     p_NS = 0; p_a = 0; p_p = 0
     for n in tree:
-        if n["r"][-1] < rNS*1.1: p_NS += n["weight"]
-        elif n["species"][0] == "a": p_a += n["weight"]
-        elif n["species"][0] == "p": p_p += n["weight"]
-        else: raise Exception("Missing case")
+        if n["final"]:
+            if n["r"][-1] < rNS*1.1: p_NS += n["weight"]
+            elif n["species"][0] == "a": p_a += n["weight"]
+            elif n["species"][0] == "p": p_p += n["weight"]
+            else: raise Exception("Missing case")
 
     print("Out")
     list_p_out[0].append(p_p) 
@@ -171,10 +246,11 @@ for num in range(1, 17):
 
     p_NS = 0; p_a = 0; p_p = 0
     for n in tree_b:
-        if n["r"][-1] < rNS*1.1: p_NS += n["weight"]
-        elif n["species"][0] == "a": p_a += n["weight"]
-        elif n["species"][0] == "p": p_p += n["weight"]
-        else: raise Exception("Missing case")
+        if n["final"]:
+            if n["r"][-1] < rNS*1.1: p_NS += n["weight"]
+            elif n["species"][0] == "a": p_a += n["weight"]
+            elif n["species"][0] == "p": p_p += n["weight"]
+            else: raise Exception("Missing case")
 
     print("In")
     list_p_in[0].append(p_p) 
@@ -190,6 +266,23 @@ for num in range(1, 17):
     list_p_naive[1].append(p0) 
     print("  photon: %.10f"%(1 - p0))
     print("  axion:  %.10f"%(p0))
+
+    if len(tree) == 3:
+        p_NS = 0; p_a = 0; p_p = 0
+        for n in tree:
+            if n["final"]:
+                if n["r"][-1] < rNS*1.1: p_NS += n["weight"]
+                elif n["species"][0] == "a": p_a += n["weight"]
+                elif n["species"][0] == "p": p_p += n["weight"]
+                else: raise Exception("Missing case")
+        list_p_one_splitting[0].append(p_p) 
+        list_p_one_splitting[1].append(p_a) 
+        list_p_one_splitting[2].append(p_NS)
+
+    if list_p_in[0][-1] < 0.1:# and list_p_out[0][-1] > 0.9:
+        list_p_ain_pout[0].append(list_p_out[0][-1])
+        list_p_ain_pout[1].append(list_p_out[1][-1])
+        list_p_ain_pout[2].append(list_p_out[2][-1])
 
     """
     def GJ_Model_wp_vec(x, t, θm, ω, B0, rNS)
@@ -220,13 +313,16 @@ for num in range(1, 17):
 
         return ωp
     """
-if plot: plt.show()
+if plot and showfig:
+    plt.show()
 
 print("Summary: ")
-print(" Photons out in naive approach: %.2e"%(np.mean(list_p_naive[0])))
-print(" Photons out in full tree:      %.2e"%(np.mean(list_p_out[0])))
-print(" Photons in NS in full tree:    %.2e"%(np.mean(list_p_out[2])))
-
+print(" Photons out in naive approach:      %.2e"%(np.mean(list_p_naive[0])))
+print(" Photons out in full tree:           %.2e"%(np.mean(list_p_out[0])))
+print(" Photons in NS in full tree:         %.2e"%(np.mean(list_p_out[2])))
+print(" Full tree, only 'nice' tracks:      %.2e"%(
+    np.mean(list_p_one_splitting[0])))
+print(" Photons, when  a in:                %.2e"%(np.mean(list_p_ain_pout[2])))
 
 #plt.figure()
 #plt.hist(list_p_naive[0], histtype="step", label="Naive")

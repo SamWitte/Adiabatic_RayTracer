@@ -98,11 +98,9 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
                                 # If negative: one splitting but stores the
                                 # original as well to be rerun later
   num_cutoff         = 2000     # Max number of total particles (must be large!)
-  num_main           = 10       # Max number of escaped main branch particles
+  num_main           = 100       # Max number of escaped main branch particles
   # ^^^^^^^^^^^^^^^^^^^
 
-  # TODO: Only compute up to next splitting
-  # TODO: Store enough information that one can compare with the naive approach
   # Initial conversion probability
   pos = [first.x first.y first.z]
   kpos = [first.kx first.ky first.kz]
@@ -240,7 +238,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
                     Prob[j]*event.weight, event.weight, [], [], [], []))
           if splittings_cutoff <= 0 
             push!(events, RT.node(xc[j], yc[j], zc[j], kxc[j], kyc[j],
-                    kzc[j], event.species, Prob[j],
+                    kzc[j], event.species, 1-Prob[j],
                     (1 - Prob[j])*event.weight, event.weight, [], [], [], []))
           end
         end
@@ -263,6 +261,9 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
       break
     end
     if count >= num_cutoff
+      break
+    end
+    if count_main >= num_main 
       break
     end
 
@@ -396,6 +397,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
                 f_inx -= 1;
             end
         end
+        #    and not interpolation of the path
         filled_positions = false;
         
         rmag = sqrt.(sum(xpos_flat.^ 2, dims=2));
@@ -427,10 +429,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
 
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         # to-do: 
-        #  - do not recompute parent
         #  - reduced effective mass of NS when the axion passes through
-        #  - use "conditions" in ODE to find level crossings
-        #    and not interpolation of the path
         #  - Check physics of EoM backwards in time
         #  - Check physics of EoM of axion
         for i in 1:batchsize
