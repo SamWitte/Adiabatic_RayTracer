@@ -123,7 +123,7 @@ mutable struct node
   ky
   kz
   species # Axion or photon?
-  #prob   # Conversion probability
+  prob   # Conversion probability
   weight
   parent_weight
   level_crossings_x
@@ -203,7 +203,19 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     end
     function cond(u, lnt, integrator)
         r_s0 = 2.0 * Mass_NS * GNew / c_km^2
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        # Axions can go inside the NS... Quick fix
+        # TODO: Make sure everything is OK when the
+        # axion is in the NS
+        arg  = 1 .- r_s0 ./ u[:, 1]
+        for i in 1:length(arg)
+          if arg[i] <= 0
+            arg[i] = 1e-10
+          end
+        end
         AA = sqrt.(1.0 .- r_s0 ./ u[:, 1])
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        #AA = sqrt.(1.0 .- r_s0 ./ u[:, 1])
         
         test = (erg ./ AA .- GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS)) ./ (erg ./ AA) .+ bounce_threshold # trigger when closer to reflection....
         
@@ -260,7 +272,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
 
           # Check if we want to stop ODE
           i.opts.userdata[:callback_count] +=1
-          if i.opts.userdata[:callback_count] == i.opts.userdata[:max_count]
+          if i.opts.userdata[:callback_count] >= i.opts.userdata[:max_count]
               cut_short = true
               terminate!(i)
           end

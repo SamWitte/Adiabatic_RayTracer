@@ -17,6 +17,7 @@ function saveTree(n::Array, filename::String="tree.txt")
     open(filename, "w") do f
       for i in 1:length(n)
         write(f, n[i].species, " ", string(n[i].weight), " ",
+              string(n[i].prob), " ",
               string(n[i].parent_weight), "\n")
         if length(n[i].level_crossings_x) > 0
           for j in 1:length(n[i].level_crossings_x)
@@ -91,13 +92,24 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
 
   # Accuracy parameters 
   # -------------------
-  tot_prob_cutoff    = 1 - 1e-8 # Cutoff total probability
-  prob_cutoff        = 1e-10     # Cutoff probability for single photons
-  splittings_cutoff  = 10        # Max number of splittings for each particles
-  num_cutoff         = 200      # Max number of total particles (must be large!)
+  tot_prob_cutoff    = 1 - 1e-10 # Cutoff total probability
+  prob_cutoff        = 1e-100    # Cutoff probability for single photons
+  splittings_cutoff  = -1       # Max number of splittings for each particles
+                                # If negative: one splitting but stores the
+                                # original as well to be rerun later
+  num_cutoff         = 2000     # Max number of total particles (must be large!)
   num_main           = 10       # Max number of escaped main branch particles
   # ^^^^^^^^^^^^^^^^^^^
 
+  # TODO: Only compute up to next splitting
+  # TODO: Store enough information that one can compare with the naive approach
+  # Initial conversion probability
+  pos = [first.x first.y first.z]
+  kpos = [first.kx first.ky first.kz]
+  Prob_nonAD = get_Prob_nonAD(pos,kpos,Mass_a,Ax_g,θm,ωPul,B0,rNS,
+                                  erg_inf_ini, vIfty_mag)
+  Prob = exp.(-Prob_nonAD)
+  first.prob = Prob[1]
 
   batchsize = 1 # Only one parent photon
 
@@ -108,6 +120,9 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
 
   count = -1
   count_main = 0
+  
+  #DEBUG
+  print("Initial conversion probability: ", Prob, "\n")
 
   while length(events) > 0
     
@@ -147,6 +162,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     if length(xc) < 1  # No crossings
         # Since we are considering the most probable first
         count_main += 1
+        tot_prob += event.weight
     else
 
       if any(abs.(kxc) .> 1) || any(abs.(kyc) .> 1) || any(abs.(kzc) .> 1)
@@ -163,7 +179,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
       end
 
       # If two crossings are close, it is likely only one crossing
-      # This happens (likely only) close to the neutron star surface (WHY??) 
+      # This happens (likely only) close to the neutron star surface
       if length(xc) > 1
         epsabs = 1e-4 # ... as ode_err 
         r = sqrt.(xc.^2 + yc.^2 + zc.^2)
@@ -209,7 +225,6 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
                                   erg_inf_ini, vIfty_mag)
       Prob = exp.(-Prob_nonAD)
 
-
       # Find "ID" of new particle              
       if event.species == "axion"
         new_species = "photon"
@@ -219,28 +234,30 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
 
       # Add all crossings to the tree
       for j in 1:Nc 
-      
         if Prob[j]*event.weight > prob_cutoff # Cutoff
           push!(events, RT.node(xc[j], yc[j], zc[j], kxc[j], kyc[j],
-                      kzc[j], new_species, Prob[j]*event.weight, event.weight, [],
-                      [], [], []))
-        #else
-          # Note: species with star (*) has not been propagated and can
-          # in principle convert
-        #  push!(tree, RT.node(xc[j], yc[j], zc[j], kxc[j], kyc[j],
-        #        kzc[j], new_species * "*",
-        #        Prob[j]*event.weight, event.weight, [], [], [], []))
+                    kzc[j], new_species, Prob[j],
+                    Prob[j]*event.weight, event.weight, [], [], [], []))
+          if splittings_cutoff <= 0 
+            push!(events, RT.node(xc[j], yc[j], zc[j], kxc[j], kyc[j],
+                    kzc[j], event.species, Prob[j],
+                    (1 - Prob[j])*event.weight, event.weight, [], [], [], []))
+          end
         end
 
         # Re-evaluate weight of parent
         event.weight = event.weight*(1-Prob[j])
       end
+      
+      if splittings_cutoff > 0 # Only final particles should count
+        tot_prob += event.weight
+      end
+
     end
 
     # Add to tree
     push!(tree, event)
-    tot_prob += event.weight
-    
+
     # Cutoff
     if tot_prob >= tot_prob_cutoff
       break
@@ -406,9 +423,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         k_init = RT.k_norm_Cart(xpos_flat, newV,  0.0, erg_inf_ini, θm, ωPul, B0, rNS, Mass_NS, melrose=melrose)
         MagnetoVars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, erg_inf_ini, flat, isotropic, melrose] # θm, ωPul, B0, rNS, gamma factors, Time = 0, mass_ns, erg ax
         
-        # send to ray tracer
-        # note, some rays pass through NS, these get removed internally (so need to redefine some stuff)
-        xF, kF, tF, fail_indx = RT.propagate(func_use_SPHERE, xpos_flat, k_init, ntimes, MagnetoVars, NumerPass);
+
 
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         # to-do: 
@@ -421,8 +436,9 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         for i in 1:batchsize
           parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
                 k_init[i, 1], k_init[i, 2], k_init[i, 3],
-                "photon", 1.0, -1.0, [], [], [], [])
+                "photon", 1.0, 1.0, -1.0, [], [], [], [])
                                # Parent weight: -1 indicates first
+                               # The last 7 elements are updated in "get_tree"
           print(i, " forward in time\n---------------------\n")
           tree = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
@@ -436,7 +452,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
           # Backwards in time equivalent to setting k->-k and vecB->-vecB (???)
           parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
                 -k_init[i, 1], -k_init[i, 2], -k_init[i, 3],
-                "axion", 1.0, -1.0, [], [], [], [])
+                "axion", 1.0, 1.0, -1.0, [], [], [], [])
           tree_backwards = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
                 flat,isotropic,melrose,NumerPass)
@@ -445,7 +461,10 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
 
         end
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        
+        # send to ray tracer
+        # note, some rays pass through NS, these get removed internally (so need to redefine some stuff)
+        xF, kF, tF, fail_indx = RT.propagate(func_use_SPHERE, xpos_flat, k_init, ntimes, MagnetoVars, NumerPass);
+      
         vmag_tot = sqrt.(vmag .^ 2 .+ vIfty_mag.^2); # km/s
         Bvec, ωp = RT.GJ_Model_vec(xpos_flat, zeros(batchsize), θm, ωPul, B0, rNS);
         Bmag = sqrt.(sum(Bvec .* Bvec, dims=2))
