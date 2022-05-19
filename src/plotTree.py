@@ -78,10 +78,10 @@ def load_tree(filename):
     return tree
 
 
-plot = True
+plot = False
 savefig = True
-showfig = True
-runs = range(1, 12)
+showfig = False
+runs = range(1, 200)
 #runs = [3]
 
 list_p_naive = [[], [], []]
@@ -89,6 +89,8 @@ list_p_in = [[], [], []]
 list_p_out = [[], [], []]
 list_p_ain_pout = [[], [], []]
 list_p_one_splitting = [[], [], []]
+pout_weighted = [[], []]
+
 for num in runs:
 
     print("\n--------- num: %i ---------"%(num))
@@ -224,16 +226,19 @@ for num in runs:
         if savefig: plt.savefig("figures/%i.pdf"%(num)) 
 
     # Play around with statistics!
-
+    ###########################################################################
     p0 = tree[0]["prob"]
-
     p_NS = 0; p_a = 0; p_p = 0
+    p_tmp = 0
     for n in tree:
         if n["final"]:
             if n["r"][-1] < rNS*1.1: p_NS += n["weight"]
             elif n["species"][0] == "a": p_a += n["weight"]
-            elif n["species"][0] == "p": p_p += n["weight"]
+            elif n["species"][0] == "p":
+                p_p += n["weight"]
+                p_tmp += n["weight"]
             else: raise Exception("Missing case")
+
 
     print("Out")
     list_p_out[0].append(p_p) 
@@ -245,13 +250,21 @@ for num in runs:
 
 
     p_NS = 0; p_a = 0; p_p = 0
+    a_tmp = 0
     for n in tree_b:
         if n["final"]:
             if n["r"][-1] < rNS*1.1: p_NS += n["weight"]
-            elif n["species"][0] == "a": p_a += n["weight"]
+            elif n["species"][0] == "a":
+                p_a += n["weight"]
+                a_tmp += n["weight"]
             elif n["species"][0] == "p": p_p += n["weight"]
             else: raise Exception("Missing case")
+    
+    pout_weighted[0].append(p_tmp) # Probability for photon out
+    pout_weighted[1].append(a_tmp) # Probability for axion in
+    print(p_tmp, a_tmp)
 
+    """
     print("In")
     list_p_in[0].append(p_p) 
     list_p_in[1].append(p_a) 
@@ -283,36 +296,9 @@ for num in runs:
         list_p_ain_pout[0].append(list_p_out[0][-1])
         list_p_ain_pout[1].append(list_p_out[1][-1])
         list_p_ain_pout[2].append(list_p_out[2][-1])
-
     """
-    def GJ_Model_wp_vec(x, t, θm, ω, B0, rNS)
-        # For GJ model, return \omega_p [eV]
-        # Assume \vec{x} is in Cartesian coordinates [km],
-        # origin at NS, z axis aligned with ω
-        # theta_m angle between B field and rotation axis
-        # t [s], omega [1/s]
 
-        r = np.sqrt(np.sum(x**2, axis=1))
-        
-        phi   = np.atan2(x[1], x[0])
-        theta = np.acos(x[2]/r)
-        psi   = phi - w*t
-        
-        Bnorm = B0*(rNS/r)**3/2
-        
-        Br = 2*Bnorm*(cos(thetam)*cos(theta)   + sin(thetam)*sin(thetam)*cos(phi))
-        Btheta = Bnorm*(cos(thetam)*sin(theta) - sin(thetam)*cos(theta)*cos(phi))
-        Bphi = Bnorm*sin(thetam)*sin(psi)
-        
-        Bx = Br*sin(theta)*cos(phi)+Btheta*cos(theta)*cos(phi)-Bphi*sin(phi)
-        By = Br*sin(theta)*sin(phi)+Btheta*cos(theta)*sin(phi)+Bphi*cos(phi)
-        Bz = Br*cos(theta)-Btheta*sin(theta)
-        
-        nelec = np.abs((2.0*omega*Bz)/np.sqrt(4*np.pi/137)*1.95e-2*hbar)
-        omegap = np.sqrt(4*np.pi*nelec/137/5.0e5)
 
-        return ωp
-    """
 if plot and showfig:
     plt.show()
 
@@ -323,6 +309,9 @@ print(" Photons in NS in full tree:         %.2e"%(np.mean(list_p_out[2])))
 print(" Full tree, only 'nice' tracks:      %.2e"%(
     np.mean(list_p_one_splitting[0])))
 print(" Photons, when  a in:                %.2e"%(np.mean(list_p_ain_pout[2])))
+
+print()
+print(np.average(pout_weighted[0], weights=pout_weighted[1]))
 
 #plt.figure()
 #plt.hist(list_p_naive[0], histtype="step", label="Naive")

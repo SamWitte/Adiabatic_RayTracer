@@ -88,18 +88,20 @@ end
 
 function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,flat,isotropic,melrose,
-    NumerPass)
+    NumerPass; num_cutoff=5, prob_cutoff=1e-10)
 
   # Accuracy parameters 
   # -------------------
-  tot_prob_cutoff    = 1 - 1e-10 # Cutoff total probability
-  prob_cutoff        = 1e-100    # Cutoff probability for single photons
-  splittings_cutoff  = -1       # Max number of splittings for each particles
+  #tot_prob_cutoff    = 1 - 1e- # Cutoff total probability
+  #prob_cutoff        = 1e-100    # Cutoff probability for single photons
+  #splittings_cutoff  = -1       # Max number of splittings for each particles
                                 # If negative: one splitting but stores the
                                 # original as well to be rerun later
-  num_cutoff         = 2000     # Max number of total particles (must be large!)
-  num_main           = 100       # Max number of escaped main branch particles
+  #num_cutoff         = 2000     # Max number of total particles (must be large!)
+  #num_main           = 5       # Max number of escaped main branch particles
   # ^^^^^^^^^^^^^^^^^^^
+
+  splittings_cutoff = -1 # The code is no longer optimal for a different number
 
   # Initial conversion probability
   pos = [first.x first.y first.z]
@@ -232,7 +234,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
 
       # Add all crossings to the tree
       for j in 1:Nc 
-        if Prob[j]*event.weight > prob_cutoff # Cutoff
+        #if Prob[j]*event.weight > prob_cutoff # Cutoff
           push!(events, RT.node(xc[j], yc[j], zc[j], kxc[j], kyc[j],
                     kzc[j], new_species, Prob[j],
                     Prob[j]*event.weight, event.weight, [], [], [], []))
@@ -241,7 +243,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
                     kzc[j], event.species, 1-Prob[j],
                     (1 - Prob[j])*event.weight, event.weight, [], [], [], []))
           end
-        end
+        #end
 
         # Re-evaluate weight of parent
         event.weight = event.weight*(1-Prob[j])
@@ -257,13 +259,13 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     push!(tree, event)
 
     # Cutoff
-    if tot_prob >= tot_prob_cutoff
+    if tot_prob >= 1 - prob_cutoff
       break
     end
-    if count >= num_cutoff
-      break
-    end
-    if count_main >= num_main 
+    #if count >= num_cutoff
+    #  break
+    #end
+    if count_main >= num_cutoff
       break
     end
 
@@ -367,6 +369,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
     Ncx_max = 1;
     
     while photon_trajs < desired_trajs
+        
         # First part of code here is just written to generate evenly spaced samples of conversion surface
         while !filled_positions
             xv, Rv, numV, weights = RT.find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS)
@@ -432,6 +435,33 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         #  - reduced effective mass of NS when the axion passes through
         #  - Check physics of EoM backwards in time
         #  - Check physics of EoM of axion
+        
+
+        vmag_tot = sqrt.(vmag .^ 2 .+ vIfty_mag.^2); # km/s
+        Bvec, ωp = RT.GJ_Model_vec(xpos_flat, zeros(batchsize), θm, ωPul, B0,
+                                   rNS);
+        Bmag = sqrt.(sum(Bvec .* Bvec, dims=2))
+        cθ = sum(newV .* Bvec, dims=2) ./ Bmag
+
+        erg_ax = erg_inf_ini./sqrt.(1.0 .- 2*GNew .* Mass_NS ./ rmag ./ c_km.^2)
+        B_tot = Bmag .* (1.95e-20) ; # GeV^2
+        
+        MagnetoVars =  [θm, ωPul, B0, rNS, [1.0 1.0], zeros(batchsize), erg_ax]
+        sln_δk = RT.dk_ds(xpos_flat, k_init, [func_use, MagnetoVars]);
+        conversion_F = sln_δk ./  (6.58e-16 .* 2.998e5) # 1/km^2;
+        
+        # compute conversion prob
+        Prob_nonAD = π ./ 2 .* (Ax_g .* B_tot) .^2 ./ conversion_F .*
+                    (1e9 .^2) ./ (vmag_tot ./ 2.998e5) .^2 ./
+                    ((2.998e5 .* 6.58e-16) .^2) ./ sin.(acos.(cθ)).^4; #unitless
+        Prob = (1.0 .- exp.(-Prob_nonAD));
+        print("Mean conversion probability:    ", sum(Prob) / length(Prob),"\n")
+        min_prob = findmin(Prob)[1]
+        print("Minimum conversion probability: ", findmin(Prob)[1], "\n")
+        print("Maximum conversion probability: ", findmax(Prob)[1], "\n")
+        #print(findmax(Prob)[1], "\n")
+        num_cutoff=5 
+
         for i in 1:batchsize
           parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
                 k_init[i, 1], k_init[i, 2], k_init[i, 3],
@@ -441,7 +471,8 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
           print(i, " forward in time\n---------------------\n")
           tree = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
-                flat,isotropic,melrose,NumerPass)
+                flat,isotropic,melrose,NumerPass;prob_cutoff=min_prob*.1,
+                num_cutoff=num_cutoff)
           printTree(tree)
           saveTree(tree, "results/forward_" * string(i))
 
@@ -454,12 +485,16 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
                 "axion", 1.0, 1.0, -1.0, [], [], [], [])
           tree_backwards = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
-                flat,isotropic,melrose,NumerPass)
+                flat,isotropic,melrose,NumerPass;prob_cutoff=min_prob*.1,
+                num_cutoff=num_cutoff)
           printTree(tree_backwards)    
           saveTree(tree_backwards, "results/backward_" * string(i))
 
         end
+        photon_trajs += batchsize 
+        return
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        
         # send to ray tracer
         # note, some rays pass through NS, these get removed internally (so need to redefine some stuff)
         xF, kF, tF, fail_indx = RT.propagate(func_use_SPHERE, xpos_flat, k_init, ntimes, MagnetoVars, NumerPass);
