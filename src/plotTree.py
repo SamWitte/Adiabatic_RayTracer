@@ -78,11 +78,11 @@ def load_tree(filename):
     return tree
 
 
-plot = False
-savefig = True
-showfig = False
-runs = range(1, 200)
-#runs = [3]
+plot = True
+savefig = False
+showfig = True
+runs = range(1, 40)
+runs = [34]
 
 list_p_naive = [[], [], []]
 list_p_in = [[], [], []]
@@ -102,11 +102,17 @@ for num in runs:
         fig = plt.figure(figsize=(9, 7))
         ax = plt.axes(projection='3d')
 
+        fig2d, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
+
         x0 = tree[0]["x"][0]
         y0 = tree[0]["y"][0]
         z0 = tree[0]["z"][0]
         ax.plot3D(tree[0]["x"][0:1], tree[0]["y"][0:1], tree[0]["z"][0:1],
                 marker="o", color="r")
+        ax1.plot(tree[0]["x"][0:1], tree[0]["y"][0:1], marker="o", color="r") 
+        ax2.plot(tree[0]["y"][0:1], tree[0]["z"][0:1], marker="o", color="r") 
+        ax3.plot(tree[0]["z"][0:1], tree[0]["x"][0:1], marker="o", color="r") 
+        
 
         NNN = 100
 
@@ -168,11 +174,26 @@ for num in runs:
             #N = min(lc + NNN, len(i["x"]))
             c = get_color(abs(i["parent_weight"])*i["prob"])
             ax.plot3D(i["x"][:], i["y"][:], i["z"][:], linestyle=ls, color=c)
+            ax1.plot(i["x"][:], i["y"][:], linestyle=ls, color=c)
+            ax2.plot(i["y"][:], i["z"][:], linestyle=ls, color=c)
+            ax3.plot(i["z"][:], i["x"][:], linestyle=ls, color=c)
             ax.plot3D(i["crossings_x"], i["crossings_y"], i["crossings_z"],
                     linestyle="", marker="*", color="g")
+            ax1.plot(i["crossings_x"], i["crossings_y"], linestyle="",
+                    marker="*", color="g")
+            ax2.plot(i["crossings_y"], i["crossings_z"], linestyle="",
+                    marker="*", color="g")
+            ax3.plot(i["crossings_z"], i["crossings_x"], linestyle="",
+                    marker="*", color="g")
             if not i["NS"] and i["final"]:
                 ax.plot3D([i["x"][-1]], [i["y"][-1]], [i["z"][-1]],
                     linestyle="", marker="s", color="b")
+                ax1.plot([i["x"][-1]], [i["y"][-1]], linestyle="", marker="s",
+                        color="b")
+                ax2.plot([i["y"][-1]], [i["z"][-1]], linestyle="", marker="s",
+                        color="b")
+                ax3.plot([i["z"][-1]], [i["x"][-1]], linestyle="", marker="s",
+                        color="b")
 
         for i in tree_b:
             if i["weight"] < cutoff: continue
@@ -181,11 +202,26 @@ for num in runs:
             #N = min(lc + NNN, len(i["x"]))
             c = get_color(abs(i["parent_weight"])*i["prob"])
             ax.plot3D(i["x"][:], i["y"][:], i["z"][:], linestyle=ls, color=c)
+            ax1.plot(i["x"][:], i["y"][:], linestyle=ls, color=c)
+            ax2.plot(i["y"][:], i["z"][:], linestyle=ls, color=c)
+            ax3.plot(i["z"][:], i["x"][:], linestyle=ls, color=c)
             ax.plot3D(i["crossings_x"], i["crossings_y"], i["crossings_z"],
                     linestyle="", marker="*", color="g")
+            ax1.plot(i["crossings_x"], i["crossings_y"], linestyle="",
+                    marker="*", color="g")
+            ax2.plot(i["crossings_y"], i["crossings_z"], linestyle="",
+                    marker="*", color="g")
+            ax3.plot(i["crossings_z"], i["crossings_x"], linestyle="",
+                    marker="*", color="g")
             if not i["NS"] and i["final"]:
                 ax.plot3D([i["x"][-1]], [i["y"][-1]], [i["z"][-1]],
                     linestyle="", marker="^", color="m")
+                ax1.plot([i["x"][-1]], [i["y"][-1]], linestyle="", marker="^",
+                        color="m")
+                ax2.plot([i["y"][-1]], [i["z"][-1]], linestyle="", marker="^",
+                        color="m")
+                ax3.plot([i["z"][-1]], [i["x"][-1]], linestyle="", marker="^",
+                        color="m")
 
 
         u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
@@ -195,35 +231,49 @@ for num in runs:
         ax.plot_surface(x, y, z, alpha=0.5, color="C0")
 
         ax.set_xlim(min(-rNS, xmin), max(rNS, xmax))
+        ax1.set_xlim(min(-rNS, xmin), max(rNS, xmax))
+        ax2.set_xlim(min(-rNS, ymin), max(rNS, ymax))
+        ax3.set_xlim(min(-rNS, zmin), max(rNS, zmax))
         ax.set_ylim(min(-rNS, ymin), max(rNS, ymax))
+        ax1.set_ylim(min(-rNS, ymin), max(rNS, ymax))
+        ax2.set_ylim(min(-rNS, zmin), max(rNS, zmax))
+        ax3.set_ylim(min(-rNS, xmin), max(rNS, xmax))
         ax.set_zlim(min(-rNS, zmin), max(rNS, zmax))
 
         sm = plt.cm.ScalarMappable(cmap=cmap)
         sm._A = [0, vmin]
         fig.colorbar(sm, label="Log probability")
-        plt.tight_layout()
-        plt.xlabel(r"$x/r_\mathrm{NS}$")
-        plt.ylabel(r"$y/r_\mathrm{NS}$")
+        fig.tight_layout()
+        fig2d.tight_layout()
+        ax.set_xlabel(r"$x/r_\mathrm{NS}$")
+        ax1.set_xlabel(r"$x/r_\mathrm{NS}$")
+        ax2.set_xlabel(r"$y/r_\mathrm{NS}$")
+        ax3.set_xlabel(r"$z/r_\mathrm{NS}$")
+        ax.set_ylabel(r"$y/r_\mathrm{NS}$")
+        ax1.set_ylabel(r"$y/r_\mathrm{NS}$")
+        ax2.set_ylabel(r"$z/r_\mathrm{NS}$")
+        ax3.set_ylabel(r"$x/r_\mathrm{NS}$")
         ax.set_zlabel(r"$z/r_\mathrm{NS}$")
-        plt.plot([], [], linestyle="", marker="o", color="r",
+        ax.plot([], [], linestyle="", marker="o", color="r",
                 label="Initial conversion")
-        plt.plot([], [], linestyle="", marker="*", color="g",
+        ax.plot([], [], linestyle="", marker="*", color="g",
                 label="Level crossing")
-        plt.plot([], [], linestyle="", marker="s", color="b",
+        ax.plot([], [], linestyle="", marker="s", color="b",
                 label="Escaping particle")
-        plt.plot([], [], linestyle="", marker="^", color="m",
+        ax.plot([], [], linestyle="", marker="^", color="m",
                 label="Approaching particle")
-        plt.plot([], [], linestyle="-", marker="", color="k",
+        ax.plot([], [], linestyle="-", marker="", color="k",
                 label="Photon (forward)")
-        plt.plot([], [], linestyle="--", marker="", color="k",
+        ax.plot([], [], linestyle="--", marker="", color="k",
                 label="Axion (forward)")
-        plt.plot([], [], linestyle="-.", marker="", color="k",
+        ax.plot([], [], linestyle="-.", marker="", color="k",
                 label="Photon (backward)")
-        plt.plot([], [], linestyle=":", marker="", color="k",
+        ax.plot([], [], linestyle=":", marker="", color="k",
                 label="Axion (backward)")
 
-        plt.legend()
-        if savefig: plt.savefig("figures/%i.pdf"%(num)) 
+        fig.legend()
+        if savefig: fig.savefig("figures/%i.pdf"%(num)) 
+        if savefig: fig2d.savefig("figures/2d-%i.pdf"%(num)) 
 
     # Play around with statistics!
     ###########################################################################
@@ -264,7 +314,6 @@ for num in runs:
     pout_weighted[1].append(a_tmp) # Probability for axion in
     print(p_tmp, a_tmp)
 
-    """
     print("In")
     list_p_in[0].append(p_p) 
     list_p_in[1].append(p_a) 
@@ -296,7 +345,6 @@ for num in runs:
         list_p_ain_pout[0].append(list_p_out[0][-1])
         list_p_ain_pout[1].append(list_p_out[1][-1])
         list_p_ain_pout[2].append(list_p_out[2][-1])
-    """
 
 
 if plot and showfig:
