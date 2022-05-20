@@ -287,7 +287,12 @@ function hamiltonian(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=true, 
     return Ham
 end
 
-function k_norm_Cart(x0, khat,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; melrose=false)
+function k_norm_Cart(x0, khat,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; melrose=false, flat=false, isotropic=false)
+    
+    if flat
+        Mass_NS = 0.0
+    end
+    
     r_s0 = 2.0 * Mass_NS * GNew / c_km^2
 
     # Switch to polar coordinates
@@ -307,17 +312,18 @@ function k_norm_Cart(x0, khat,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; melros
     omP = GJ_Model_ωp_vecSPH(x0_pl, time0, θm, ωPul, B0, rNS);
     g_tt, g_rr, g_thth, g_pp = g_schwartz(x0_pl, Mass_NS);
     
-    # ksqr = g_tt .* erg.^2 .+ g_rr .* w0_pl[:, 1].^2 .+ g_thth .* w0_pl[:, 2].^2 .+ g_pp .* w0_pl[:, 3].^2
     
     ctheta = Ctheta_B_sphere(x0_pl, w0_pl, [θm, ωPul, B0, rNS, time0, Mass_NS])
-
+    if isotropic
+        ctheta .*= 0.0
+    end
+    
     if !melrose
         norm = sqrt.(abs.( (omP.^2 .* (1.0 .- ctheta.^2) ./ (omP.^2 .* ctheta.^2 .- erg.^2 ./ g_rr)  .* erg.^2 ./ g_rr .- g_tt .* erg.^2 ) ./ (g_rr .* w0_pl[:, 1].^2 .+ g_thth .* w0_pl[:, 2].^2 .+ g_pp .* w0_pl[:, 3].^2)))
     else
         k_no_norm2 = (g_rr .* w0_pl[:, 1].^2 .+ g_thth .* w0_pl[:, 2].^2 .+ g_pp .* w0_pl[:, 3].^2)
         norm = sqrt.((g_tt .* erg.^2 .+ omP.^2) ./ (k_no_norm2 .* (omP.^2 .* ctheta.^2 ./ (erg.^2 ./ g_rr) .- 1.0)))
     end
-    
     
     return norm .* khat
 end
@@ -510,11 +516,31 @@ function surfNorm(x0, k0, Mvars; return_cos=true)
     ω, Mvars2 = Mvars
     θm, ωPul, B0, rNS, gammaF, t_start, Mass_NS = Mvars2
     
+    
+    rr = sqrt.(sum(x0.^2, dims=2))
+    # r theta phi
+    x0_pl = [rr acos.(x0[:,3] ./ rr) atan.(x0[:,2], x0[:,1])]
+    # vr, vtheta, vphi --- Define lower momenta and upper indx pos
+    # [unitless, unitless, unitless ]
+    dr_dt = sum(x0 .* k0, dims=2) ./ rr
+    v0_pl = [dr_dt (x0[:,3] .* dr_dt .- rr .* k0[:,3]) ./ (rr .* sin.(x0_pl[:,2])) (-x0[:,2] .* k0[:,1] .+ x0[:,1] .* k0[:,2]) ./ (rr .* sin.(x0_pl[:,2])) ];
+    # Switch to celerity in polar coordinates
+    r_s0 = 2.0 * Mass_NS * GNew / c_km^2
+    AA = (1.0 .- r_s0 ./ rr)
+    w0_pl = [v0_pl[:,1] ./ sqrt.(AA)   v0_pl[:,2] ./ rr .* rr.^2  v0_pl[:,3] ./ (rr .* sin.(x0_pl[:,2])) .* (rr .* sin.(x0_pl[:,2])).^2 ] ./ AA # lower index defined, [eV, eV * km, eV * km]
+    g_tt, g_rr, g_thth, g_pp = g_schwartz(x0_pl, Mass_NS)
+    
+    dωdr_grd = grad(GJ_Model_ωp_vecSPH(seed(x0_pl), t_start, θm, ωPul, B0, rNS))
+    snorm = dωdr_grd ./ sqrt.(g_rr .* dωdr_grd[:, 1].^2  .+ g_thth .* dωdr_grd[:, 2].^2 .+ g_pp .* dωdr_grd[:, 3].^2)
+    knorm = sqrt.(g_rr .* w0_pl[:,1].^2 .+ g_thth .* w0_pl[:,2].^2 .+ g_pp .* w0_pl[:,3].^2)
+    ctheta = (g_rr .* w0_pl[:,1] .* snorm[:, 1] .+ g_thth .* w0_pl[:,2] .* snorm[:, 2] .+ g_pp .* w0_pl[:,3] .* snorm[:, 3]) ./ knorm
 
+    
     # classical...
-    dωdr_grd_2 = grad(GJ_Model_ωp_vec(seed(x0), t_start, θm, ωPul, B0, rNS))
-    snorm_2 = dωdr_grd_2 ./ sqrt.(sum(dωdr_grd_2 .^ 2, dims=2))
-    ctheta = (sum(k0 .* snorm_2, dims=2) ./ sqrt.(sum(k0 .^ 2, dims=2)))
+    # dωdr_grd_2 = grad(GJ_Model_ωp_vec(seed(x0), t_start, θm, ωPul, B0, rNS))
+    # snorm_2 = dωdr_grd_2 ./ sqrt.(sum(dωdr_grd_2 .^ 2, dims=2))
+    # ctheta = (sum(k0 .* snorm_2, dims=2) ./ sqrt.(sum(k0 .^ 2, dims=2)))
+    # print(ctheta, "\n", cthetaG, "\n\n")
     
     
     if return_cos
@@ -845,7 +871,7 @@ function ωGam(x, k, t, θm, ωPul, B0, rNS, gammaF)
     return ω_final
 end
 
-function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS)
+function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_max=8)
     batchsize = 2;
 
 
@@ -858,8 +884,8 @@ function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS)
     vvec_all = [sin.(θi) .* cos.(ϕi) sin.(θi) .* sin.(ϕi) cos.(θi)];
     # randomly sample x1 and x2 (rotated vectors in disk perpendicular to (r=1, θ, ϕ) with max radius R)
     ϕRND = rand(batchsize) .* 2π;
-    # rRND = sqrt.(rand(batchsize)) .* maxR; standard flat sampling
-    rRND = rand(batchsize) .* maxR; # New 1/r sampling
+    rRND = sqrt.(rand(batchsize)) .* maxR; # standard flat sampling
+    # rRND = rand(batchsize) .* maxR; # New 1/r sampling
     x1 = rRND .* cos.(ϕRND);
     x2 = rRND .* sin.(ϕRND);
     # rotate using Inv[EurlerMatrix(ϕi, θi, 0)] on vector (x1, x2, 0)
@@ -976,7 +1002,7 @@ end
 
 
 
-function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, gammaF, batchsize; flat=true, isotropic=false, melrose=false, ode_err=1e-5, cutT=100000, fix_time=Nothing, CLen_Scale=true, file_tag="", ntimes=1000, v_NS=[0 0 0], rho_DM=0.3, save_more=false, vmean_ax=220.0, ntimes_ax=10000, dir_tag="results")
+function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, gammaF, batchsize; flat=true, isotropic=false, melrose=false, ode_err=1e-5, cutT=100000, fix_time=Nothing, CLen_Scale=true, file_tag="", ntimes=1000, v_NS=[0 0 0], rho_DM=0.3, save_more=false, vmean_ax=220.0, ntimes_ax=10000, dir_tag="results", n_maxSample=8)
 
 
     # axion mass [eV], axion-photon coupling [1/GeV], misalignment angle (rot-B field) [rad], rotational freq pulars [1/s]
@@ -1006,7 +1032,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         return
     end
 
-
+    
     photon_trajs = 1
     desired_trajs = Ntajs
     # assumes desired_trajs large!
@@ -1017,6 +1043,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         SaveAll = zeros(desired_trajs * 2, 11);
     end
     f_inx = 0;
+    accur_threshold = 1e-4
 
     # define arrays that are used in surface area sampling
     tt_ax = LinRange(-2*maxR, 2*maxR, ntimes_ax); # Not a real physical time -- just used to get trajectory crossing
@@ -1043,6 +1070,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
     else
         phaseApprox = false;
     end
+    phaseApprox = false;
     vNS_mag = sqrt.(sum(v_NS.^2));
     if vNS_mag .> 0
         vNS_theta = acos.(v_NS[3] ./ vNS_mag);
@@ -1061,23 +1089,21 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
     while photon_trajs < desired_trajs
         # First part of code here is just written to generate evenly spaced samples of conversion surface
         while !filled_positions
-            xv, Rv, numV, weights = RT.find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS)
-            f_inx += 2;
+            
+            xv, Rv, numV, weights = RT.find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS, n_max=n_maxSample)
+            f_inx += 2
             
             if numV == 0
                 continue
             end
-            
-            # for i in 1:1
-            for i in 1:numV # Keep more?
-                if weights[i] .> Ncx_max
-                    Ncx_max = weights[i]
-                end
-                if fill_indx <= batchsize
+          
 
+            for i in 1:numV # Keep more?
+                f_inx -= 1
+                if fill_indx <= batchsize
                     xpos_flat[fill_indx, :] .= xv[i, :];
                     R_sample[fill_indx] = Rv[i];
-                    mcmc_weights[fill_indx] = weights[i];
+                    mcmc_weights[fill_indx] = n_maxSample;
                     fill_indx += 1
                     
                 end
@@ -1086,12 +1112,10 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
             if fill_indx > batchsize
                 filled_positions = true
                 fill_indx = 1
-                f_inx -= 1;
             end
         end
         filled_positions = false;
-        
- 
+
         
         vIfty = erfinv.(2 .* rand(batchsize, 3) .- 1.0) .* vmean_ax .+ v_NS # km /s
         rmag = sqrt.(sum(xpos_flat.^ 2, dims=2));
@@ -1108,14 +1132,15 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
             while !found
                 vGu = rand()
                 velV, accur = RT.solve_vel_CS(θ[i], ϕ[i], rmag[i], vIfty[i,:] ./ 2.998e5, guess=[vGu vGu vGu], errV=1e-20)
-                if accur .< 1e-4
+                test_func = (sum(velV.^2) .- (2 .* GNew .* Mass_NS ./ rmag[i] ./ (c_km .^ 2))); # unitless
+                if (accur .< accur_threshold)&&(test_func .> 0)
                     newV[i, :] .= velV[1, :]
                     jacVs[i] = RT.jacobian_fv(xpos_flat[i, :], velV)
                     found = true
                 end
                 cnt_careful += 1
                 if cnt_careful > 50
-                    print("failing here at pt 1....")
+                    print("Personal ERROR:failing here, check what is happening.... \n\n")
                     break;
                 end
             end
@@ -1143,7 +1168,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         erg_inf_ini = Mass_a .* sqrt.(1 .+ (vIfty_mag ./ c_km .* gammaA).^2)
         
         # define initial momentum (magnitude)
-        k_init = RT.k_norm_Cart(xpos_flat, newV,  0.0, erg_inf_ini, θm, ωPul, B0, rNS, Mass_NS, melrose=melrose)
+        k_init = RT.k_norm_Cart(xpos_flat, newV,  0.0, erg_inf_ini, θm, ωPul, B0, rNS, Mass_NS, melrose=melrose, isotropic=isotropic, flat=flat)
         MagnetoVars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, erg_inf_ini, flat, isotropic, melrose] # θm, ωPul, B0, rNS, gamma factors, Time = 0, mass_ns, erg ax
         
         # send to ray tracer
@@ -1166,25 +1191,14 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         
 
         # compute conversion prob
-        Prob_nonAD = π ./ 2 .* (Ax_g .* B_tot) .^2 ./ conversion_F .* (1e9 .^2) ./ (vmag_tot ./ 2.998e5) .^2 ./ ((2.998e5 .* 6.58e-16) .^2) ./ sin.(acos.(cθ)).^4; #unitless
+        mass_factorR = 1 ./ (sin.(acos.(cθ)).^2 .+ (vmag_tot ./ 2.998e5).^2).^2
+        Prob_nonAD = π ./ 2 .* (Ax_g .* B_tot) .^2 ./ conversion_F .* (1e9 .^2) ./ (vmag_tot ./ 2.998e5) .^2 ./ ((2.998e5 .* 6.58e-16) .^2) .* mass_factorR; #unitless
         Prob = (1.0 .- exp.(-Prob_nonAD));
 
-        # phase space factors, first assumes vNS = 0, second more general but needs more samples
-        if phaseApprox
-            phaseS = (π .* maxR .* R_sample .* 2.0) .* rho_DM .* Prob ./ Mass_a .* (vmag_tot ./ c_km) .^ 2 ./ sqrt.(sum( (vIfty ./ c_km) .^ 2, dims=2))
-        else
-            phaseS = (π .* maxR .* R_sample .* 2.0) .* rho_DM .* Prob ./ Mass_a
-            phaseS .*= jacVs
-            # vmag is vmin [km/s]
-            # vmag_tot is v [km/s]
-#            rhat = xpos_flat ./ sqrt.(sum(xpos_flat.^2, dims=2));
-#            vnear = vvec_flat .* vmag_tot;
-#            vinf_mag = sqrt.(sum( (vIfty) .^ 2, dims=2));
-#            vinf_gf = (vinf_mag.^2 .* vnear .+ vinf_mag .* vmag.^2 ./ 2 .* rhat .- vinf_mag .* vnear .* sum(vnear .* rhat, dims=2)) ./ (vinf_mag.^2 .+ vmag.^2 ./ 2 .- vinf_mag .* sum(vnear .* rhat, dims=2))
-
-#            phaseS .*= vmag_tot.^2 .* exp.(- sum((vinf_gf .- v_NS).^2, dims=2) ./ vmean_ax.^2 ) ./ (sqrt.(vmag_tot.^2 .- vmag.^2) .* exp.(- sum((vIfty .- v_NS).^2, dims=2) ./ vmean_ax.^2)) ./ c_km
-        end
         
+        # phaseS = (π .* maxR .* R_sample .* 2.0) .* rho_DM .* Prob ./ Mass_a
+        phaseS =  (2 .* π .* maxR.^2) .* rho_DM .* Prob ./ Mass_a
+        phaseS .*= jacVs
         sln_prob = weight_angle .* phaseS .* (1e5 .^ 2) .* c_km .* 1e5 .* mcmc_weights .* fail_indx ; # photons / second
 
         # archaic re definition from old feature that has been removed
@@ -1224,6 +1238,8 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
         # cut out spurious features from high Lc cut
         weightC[weightC[:] .> 1.0] .= 1.0;
         
+        f_inx += num_photons
+        
         # Save info
         SaveAll[photon_trajs:photon_trajs + num_photons - 1, 1] .= view(θf, :); # final momentum theta
         SaveAll[photon_trajs:photon_trajs + num_photons - 1, 2] .= view(ϕf,:); # final momentum phi
@@ -1255,7 +1271,7 @@ function main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, 
     
     # cut out unused elements
     SaveAll = SaveAll[SaveAll[:,6] .> 0, :];
-    SaveAll[:,6] ./= (float(f_inx) .* float(Ncx_max)); # divide off by N trajectories sampled
+    SaveAll[:,6] ./= (float(f_inx) ); # divide off by N trajectories sampled
 
     fileN = "results/Fast_Trajectories_MassAx_"*string(Mass_a)*"_AxionG_"*string(Ax_g)*"_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0);
     fileN *= "_Ax_trajs_"*string(Ntajs);

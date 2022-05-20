@@ -20,7 +20,7 @@ function parse_commandline()
         # number photon trajectories
         "--Nts"
             arg_type = Int
-            default = 1000
+            default = 100
         # file tage
         "--ftag"
             arg_type = String
@@ -32,7 +32,7 @@ function parse_commandline()
         # axion mass
         "--MassA"
             arg_type = Float64
-            default = 1e-6
+            default = 2e-5
         # surface magnetic field
         "--B0"
             arg_type = Float64
