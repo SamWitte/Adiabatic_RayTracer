@@ -48,7 +48,7 @@ def load_tree(filename):
             tree.append({}); i += 1
             tree[i]["species"], w, prob, wp = line.strip().split()
             tree[i]["weight"] = float(w)
-            tree[i]["prob"] = float(prob)
+            tree[i]["prob"] = 1 if float(wp) == -1 else float(prob)
             tree[i]["parent_weight"] = float(wp)
             lc = f.readline()
             if lc[0] == "-": # No splitting
@@ -79,10 +79,10 @@ def load_tree(filename):
 
 
 plot = True
-savefig = False
+savefig = True
 showfig = True
-runs = range(1, 40)
-runs = [34]
+runs = range(1, 4)
+#runs = [34]
 
 list_p_naive = [[], [], []]
 list_p_in = [[], [], []]
@@ -95,8 +95,8 @@ for num in runs:
 
     print("\n--------- num: %i ---------"%(num))
         
-    tree = load_tree("results/forward_%i"%(num))
-    tree_b = load_tree("results/backward_%i"%(num))
+    tree = load_tree("results/forward__3__GR_%i"%(num))
+    tree_b = load_tree("results/backward__3__GR_%i"%(num))
 
     if plot:
         fig = plt.figure(figsize=(9, 7))

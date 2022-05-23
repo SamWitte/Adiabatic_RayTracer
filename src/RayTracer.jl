@@ -429,7 +429,12 @@ function hamiltonian_axion(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS, mass
 end
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-function k_norm_Cart(x0, khat,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; melrose=false)
+function k_norm_Cart(x0, khat,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; melrose=false, flat=false, isotropic=false)
+    
+    if flat
+        Mass_NS = 0.0
+    end
+    
     r_s0 = 2.0 * Mass_NS * GNew / c_km^2
 
     # Switch to polar coordinates
@@ -449,17 +454,18 @@ function k_norm_Cart(x0, khat,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; melros
     omP = GJ_Model_ωp_vecSPH(x0_pl, time0, θm, ωPul, B0, rNS);
     g_tt, g_rr, g_thth, g_pp = g_schwartz(x0_pl, Mass_NS);
     
-    # ksqr = g_tt .* erg.^2 .+ g_rr .* w0_pl[:, 1].^2 .+ g_thth .* w0_pl[:, 2].^2 .+ g_pp .* w0_pl[:, 3].^2
     
     ctheta = Ctheta_B_sphere(x0_pl, w0_pl, [θm, ωPul, B0, rNS, time0, Mass_NS])
-
+    if isotropic
+        ctheta .*= 0.0
+    end
+    
     if !melrose
         norm = sqrt.(abs.( (omP.^2 .* (1.0 .- ctheta.^2) ./ (omP.^2 .* ctheta.^2 .- erg.^2 ./ g_rr)  .* erg.^2 ./ g_rr .- g_tt .* erg.^2 ) ./ (g_rr .* w0_pl[:, 1].^2 .+ g_thth .* w0_pl[:, 2].^2 .+ g_pp .* w0_pl[:, 3].^2)))
     else
         k_no_norm2 = (g_rr .* w0_pl[:, 1].^2 .+ g_thth .* w0_pl[:, 2].^2 .+ g_pp .* w0_pl[:, 3].^2)
         norm = sqrt.((g_tt .* erg.^2 .+ omP.^2) ./ (k_no_norm2 .* (omP.^2 .* ctheta.^2 ./ (erg.^2 ./ g_rr) .- 1.0)))
     end
-    
     
     return norm .* khat
 end
@@ -652,11 +658,31 @@ function surfNorm(x0, k0, Mvars; return_cos=true)
     ω, Mvars2 = Mvars
     θm, ωPul, B0, rNS, gammaF, t_start, Mass_NS = Mvars2
     
+    
+    rr = sqrt.(sum(x0.^2, dims=2))
+    # r theta phi
+    x0_pl = [rr acos.(x0[:,3] ./ rr) atan.(x0[:,2], x0[:,1])]
+    # vr, vtheta, vphi --- Define lower momenta and upper indx pos
+    # [unitless, unitless, unitless ]
+    dr_dt = sum(x0 .* k0, dims=2) ./ rr
+    v0_pl = [dr_dt (x0[:,3] .* dr_dt .- rr .* k0[:,3]) ./ (rr .* sin.(x0_pl[:,2])) (-x0[:,2] .* k0[:,1] .+ x0[:,1] .* k0[:,2]) ./ (rr .* sin.(x0_pl[:,2])) ];
+    # Switch to celerity in polar coordinates
+    r_s0 = 2.0 * Mass_NS * GNew / c_km^2
+    AA = (1.0 .- r_s0 ./ rr)
+    w0_pl = [v0_pl[:,1] ./ sqrt.(AA)   v0_pl[:,2] ./ rr .* rr.^2  v0_pl[:,3] ./ (rr .* sin.(x0_pl[:,2])) .* (rr .* sin.(x0_pl[:,2])).^2 ] ./ AA # lower index defined, [eV, eV * km, eV * km]
+    g_tt, g_rr, g_thth, g_pp = g_schwartz(x0_pl, Mass_NS)
+    
+    dωdr_grd = grad(GJ_Model_ωp_vecSPH(seed(x0_pl), t_start, θm, ωPul, B0, rNS))
+    snorm = dωdr_grd ./ sqrt.(g_rr .* dωdr_grd[:, 1].^2  .+ g_thth .* dωdr_grd[:, 2].^2 .+ g_pp .* dωdr_grd[:, 3].^2)
+    knorm = sqrt.(g_rr .* w0_pl[:,1].^2 .+ g_thth .* w0_pl[:,2].^2 .+ g_pp .* w0_pl[:,3].^2)
+    ctheta = (g_rr .* w0_pl[:,1] .* snorm[:, 1] .+ g_thth .* w0_pl[:,2] .* snorm[:, 2] .+ g_pp .* w0_pl[:,3] .* snorm[:, 3]) ./ knorm
 
+    
     # classical...
-    dωdr_grd_2 = grad(GJ_Model_ωp_vec(seed(x0), t_start, θm, ωPul, B0, rNS))
-    snorm_2 = dωdr_grd_2 ./ sqrt.(sum(dωdr_grd_2 .^ 2, dims=2))
-    ctheta = (sum(k0 .* snorm_2, dims=2) ./ sqrt.(sum(k0 .^ 2, dims=2)))
+    # dωdr_grd_2 = grad(GJ_Model_ωp_vec(seed(x0), t_start, θm, ωPul, B0, rNS))
+    # snorm_2 = dωdr_grd_2 ./ sqrt.(sum(dωdr_grd_2 .^ 2, dims=2))
+    # ctheta = (sum(k0 .* snorm_2, dims=2) ./ sqrt.(sum(k0 .^ 2, dims=2)))
+    # print(ctheta, "\n", cthetaG, "\n\n")
     
     
     if return_cos
@@ -987,7 +1013,7 @@ function ωGam(x, k, t, θm, ωPul, B0, rNS, gammaF)
     return ω_final
 end
 
-function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS)
+function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_max=8)
     batchsize = 2;
 
 
@@ -1000,8 +1026,8 @@ function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS)
     vvec_all = [sin.(θi) .* cos.(ϕi) sin.(θi) .* sin.(ϕi) cos.(θi)];
     # randomly sample x1 and x2 (rotated vectors in disk perpendicular to (r=1, θ, ϕ) with max radius R)
     ϕRND = rand(batchsize) .* 2π;
-    # rRND = sqrt.(rand(batchsize)) .* maxR; standard flat sampling
-    rRND = rand(batchsize) .* maxR; # New 1/r sampling
+    rRND = sqrt.(rand(batchsize)) .* maxR; # standard flat sampling
+    # rRND = rand(batchsize) .* maxR; # New 1/r sampling
     x1 = rRND .* cos.(ϕRND);
     x2 = rRND .* sin.(ϕRND);
     # rotate using Inv[EurlerMatrix(ϕi, θi, 0)] on vector (x1, x2, 0)
@@ -1113,6 +1139,7 @@ end
 
 
 end
+
 
 function dist_diff(xfin)
     b = zeros(size(xfin[:,1,:]))

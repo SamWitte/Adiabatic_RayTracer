@@ -24,7 +24,7 @@ function parse_commandline()
         # number photon trajectories
         "--Nts"
             arg_type = Int
-            default = 1000
+            default = 100
         # file tage
         "--ftag"
             arg_type = String
@@ -36,7 +36,11 @@ function parse_commandline()
         # axion mass
         "--MassA"
             arg_type = Float64
-            default = 1e-6
+            default = 2e-5
+        # coupling
+        "--Axg"
+            arg_type = Float64
+            default = 1e-12
         # surface magnetic field
         "--B0"
             arg_type = Float64
@@ -45,7 +49,6 @@ function parse_commandline()
         "--run_RT"
             arg_type = Int
             default = 1
-
         # should we combine file runs
         "--run_Combine"
             arg_type = Int
@@ -54,6 +57,10 @@ function parse_commandline()
         "--side_runs"
             arg_type = Int
             default = 0
+        # what batchsize is used?
+        "--batchSize"
+            arg_type = Int
+            default = 4
         # radius NS
         "--rNS"
             arg_type = Float64
@@ -74,8 +81,22 @@ function parse_commandline()
         "--vNS_z"
             arg_type = Float64
             default = 0.0
-        
-
+        # ---- Tree parameters ----
+        # create tree or standard run (call main_runner or main_runner_tree)
+        # 1->tree, 0->standard
+        "--tree"
+            arg_type = Int
+            default = 0
+        # seed
+        "--seed"
+            arg_type = Int
+            default = -1 # random seed
+        # info level
+        # 0 -> minimum output: init and output particle weights
+        # 5 -> maximum output: complete tree
+        "--infoLevel"
+            arg_type = Int
+            default = 5
     end
 
     return parse_args(s)
@@ -84,7 +105,7 @@ end
 parsed_args = parse_commandline()
 
 Mass_a = parsed_args["MassA"]; # eV
-Ax_g = 1e-12; # 1/GeV
+Ax_g = parsed_args["Axg"]; # 1/GeV
 θm = parsed_args["ThetaM"]; # rad
 ωPul = parsed_args["rotW"]; # 1/s
 B0 = parsed_args["B0"]; # G
@@ -93,7 +114,7 @@ Mass_NS = parsed_args["Mass_NS"]; # solar mass
 ωProp = "Simple"; # NR: Standard. Dispersion relation
 Ntajs = parsed_args["Nts"];
 gammaF = [1.0, 1.0]
-batchSize = 4; # how to batch runs
+batchSize = parsed_args["batchSize"]; # how to batch runs
 CLen_Scale = false # if true, perform cut due to de-phasing
 cutT = 10000; # keep highest weight 'cutT' each batch
 fix_time = 0.0; # eval at fixed time = 0?
@@ -105,6 +126,11 @@ flat = false; # flat space or schwartzchild
 isotropic = false; # default is anisotropic
 melrose = true; # keep true, more efficient
 ntimes_ax = 10000; # vector scan for resonance
+
+# Tree parameters
+info_level = parsed_args["infoLevel"]
+num_cutoff = 5
+prob_cutoff = 1e-6
 
 print("Parameters: ", Mass_a, "\n")
 print(Ax_g, "\n")
@@ -122,7 +148,21 @@ print(cutT, "\n")
 time0=Dates.now()
 
 if parsed_args["run_RT"] == 1
-    @inbounds @fastmath main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp, Ntajs, gammaF, batchSize; flat=flat,isotropic=isotropic, melrose=melrose, ode_err=ode_err, cutT=cutT, fix_time=fix_time, CLen_Scale=CLen_Scale, file_tag=file_tag, ntimes=ntimes, v_NS=vNS, ntimes_ax=ntimes_ax);
+  if parsed_args["tree"] == 0
+    @inbounds @fastmath main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS,
+              Mass_NS, ωProp, Ntajs, gammaF, batchSize;
+              flat=flat, isotropic=isotropic, melrose=melrose, ode_err=ode_err,
+              cutT=cutT, fix_time=fix_time, CLen_Scale=CLen_Scale,
+              file_tag=file_tag, ntimes=ntimes, v_NS=vNS, ntimes_ax=ntimes_ax);
+  else
+    @inbounds @fastmath main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS,
+              Mass_NS, ωProp, Ntajs, gammaF, batchSize;
+              flat=flat, isotropic=isotropic, melrose=melrose, ode_err=ode_err,
+              cutT=cutT, fix_time=fix_time, CLen_Scale=CLen_Scale,
+              file_tag=file_tag, ntimes=ntimes, v_NS=vNS, ntimes_ax=ntimes_ax,
+              info_level=info_level, num_cutoff=num_cutoff, 
+              prob_cutoff=prob_cutoff)
+  end
 end
 
 
