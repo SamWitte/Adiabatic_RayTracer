@@ -102,12 +102,23 @@ function func_axion!(du, u, Mvars, lnt)
             Mass_NS = 0.0;
         end
         time = time0 .+  t;
-        
+       
+        r = u[:, 1]
+        Mass_NS = Mass_NS*ones(length(r))
+        Mass_NS[r .< rNS] = r[r .< rNS].^3/rNS^3
+
         g_tt, g_rr, g_thth, g_pp = g_schwartz(view(u, :, 1:3), Mass_NS);
-        
-        du[:, 4:6] .= -grad(hamiltonian_axion(seed(view(u, :, 1:3)), view(u, :, 4:6) .* erg , time[1], erg, θm, ωPul, B0, rNS, Mass_NS, mass_axion, iso=isotropic, melrose=melrose)) .* c_km .* t .* (g_rr ./ erg) ./ erg;
-        du[:, 1:3] .= grad(hamiltonian_axion(view(u, :, 1:3), seed(view(u, :, 4:6)  .* erg ), time[1], erg, θm, ωPul, B0, rNS, Mass_NS, mass_axion, iso=isotropic, melrose=melrose)) .* c_km .* t .* (g_rr ./ erg);
-        du[u[:,1] .<= rNS, :] .= 0.0;
+
+
+        du[:, 4:6] .= -grad(hamiltonian_axion(seed(view(u, :, 1:3)),
+                       view(u, :, 4:6) .* erg , time[1], erg, θm, ωPul, B0, rNS,
+                       Mass_NS, mass_axion, iso=isotropic, melrose=melrose)) .*
+                           c_km .* t .* (g_rr ./ erg) ./ erg;
+        du[:, 1:3] .= grad(hamiltonian_axion(view(u, :, 1:3),
+              seed(view(u, :, 4:6)  .* erg ), time[1], erg, θm, ωPul,
+              B0, rNS, Mass_NS, mass_axion, iso=isotropic, melrose=melrose)) .*
+                    c_km .* t .* (g_rr ./ erg);
+        #du[u[:,1] .<= rNS, :] .= 0.0;
         
         du[:,7 ] .= derivative(tI -> hamiltonian_axion(view(u, :, 1:3), view(u, :, 4:6)  .* erg , tI, erg, θm, ωPul, B0, rNS, Mass_NS, mass_axion, iso=isotropic, melrose=melrose), time[1])[:] .* c_km .* t .* (g_rr[:] ./ erg[:]);
         
@@ -150,6 +161,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
         Mass_NS = 0.0;
     end
     
+
     # Define the Schwarzschild radius of the NS (in km)
     r_s0 = 2.0 * Mass_NS * GNew / c_km^2
 
@@ -176,7 +188,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     u0 = ([x0_pl w0_pl zeros(length(rr))])
     # u0 = ([x0_pl w0_pl])
    
-    bounce_threshold = 1e-3#0.0
+    bounce_threshold = 0.0
 
     function floor_aff!(int)
     
@@ -207,13 +219,13 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
         # Axions can go inside the NS... Quick fix
         # TODO: Make sure everything is OK when the
         # axion is in the NS
-        arg  = 1 .- r_s0 ./ u[:, 1]
-        for i in 1:length(arg)
-          if arg[i] <= 0
-            arg[i] = 1e-10
-          end
-        end
-        AA = sqrt.(1.0 .- r_s0 ./ u[:, 1])
+        #arg  = 1 .- r_s0 ./ u[:, 1]
+        #for i in 1:length(arg)
+        #  if arg[i] <= 0
+        #    arg[i] = 1e-10
+        #  end
+        #end
+        #AA = sqrt.(1.0 .- r_s0 ./ u[:, 1])
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         #AA = sqrt.(1.0 .- r_s0 ./ u[:, 1])
         
@@ -254,11 +266,18 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
             end
           end
 
-          # Store crossing
-          #                 Cartesian
-          push!( xc, i.u[1]*sin(i.u[2])*cos(i.u[3]) )
-          push!( yc, i.u[1]*sin(i.u[2])*sin(i.u[3]) )
-          push!( zc, i.u[1]*cos(i.u[2]) )
+          # Compute position in cartesian coordinates
+          xpos = i.u[1]*sin(i.u[2])*cos(i.u[3]) 
+          ypos = i.u[1]*sin(i.u[2])*sin(i.u[3])
+          zpos = i.u[1]*cos(i.u[2])
+          # Conversions close to the surface is unlikely
+          # Slightly better to include this in "condition"!
+          if sqrt(xpos^2 + ypos^2 + zpos^2) < rNS*1.01
+            return
+          end
+          push!( xc, xpos )
+          push!( yc, ypos )
+          push!( zc, zpos )
 
           # Compute proper velocity
           r_s = 2.0 * Mass_NS * GNew / c_km^2
@@ -278,16 +297,16 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
           end
       end
       # Cut if inside a neutron star (and a photon). 
-      condition_r(u,lnt,integrator) = u[1] < (rNS + 1e-2)
+      condition_r(u,lnt,integrator) = u[1] < (rNS*1.01)
       affect_r!(integrator) = terminate!(integrator)
      
       cb_s = ContinuousCallback(condition, affect!)
       cb_r = DiscreteCallback(condition_r, affect_r!)
-      #if is_axion
-      #  cbset = CallbackSet(cb, cb_s)
-      #else
+      if is_axion
+        cbset = CallbackSet(cb_s) # cb->reflection, cb_->NS, not for axion
+      else
         cbset = CallbackSet(cb, cb_s, cb_r)
-      #end
+      end
 
       prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], reltol=1e-5, abstol=ode_err,
                    max_iters=1e5, callback=cbset,
@@ -300,6 +319,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
       prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], reltol=1e-5, abstol=ode_err, max_iters=1e5, callback=cb, dtmin=1e-13, dtmax=1e-2, force_dtmin=true)
     end
 
+
     # Solve the ODEproblem
     sol = solve(prob, Vern6(), saveat=saveat)
     # sol = solve(prob, lsoda(), saveat=saveat)
@@ -308,16 +328,24 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
         sol.u[i][:,4:6] .*= erg
     end
    
-    
+
+
+    #!!!!!!!!
+    # Axion can be inside NS
+    r = [sol.u[i][1] for i in 1:length(sol.u)]
+    Mass_NS = Mass_NS*ones(length(r))
+    Mass_NS[r .< rNS] = r[r .< rNS].^3/rNS^3
+
     # Define the Schwarzschild radii (in km)
     r_s = 2.0 .* ones(length(sol.u[1][:,1]), length(sol.u)) .* Mass_NS .* GNew ./ c_km^2
-    
+    #Mass_NS[r .< 0.5*rNS] .= 0
     # print(sum(sol.u[end][:,1] .< 1e4), "\t", sol.u[end][:,1] , "\n")
     # Calculate the total particle energies (unitless); this is later used to find the resonance and should be constant along the trajectory
-    for i in 1:length(sol.u)
-        sol.u[i][sol.u[i][:,1] .<= r_s[:,i], 1] .= 2.0 .* Mass_NS .* GNew ./ c_km^2 .+ 1e-10
-    end
-    ω = [(1.0 .- r_s[:,i] ./ sol.u[i][:,1]) for i in 1:length(sol.u)]
+    #for i in 1:length(sol.u)
+    #    sol.u[i][sol.u[i][:,1] .<= r_s[:,i], 1] .= 2.0 .* Mass_NS .* GNew ./ c_km^2 .+ 1e-10
+    #end
+    #ω = [(1.0 .- r_s[:,i] ./ sol.u[i][:,1]) for i in 1:length(sol.u)]
+    ω = [(1.0 .- r_s[i] ./ sol.u[i][:,1]) for i in 1:length(sol.u)]
 
 
 
@@ -326,7 +354,6 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     
     # Switch back to Cartesian coordinates
     x = [[sol.u[i][:,1] .* sin.(sol.u[i][:,2]) .* cos.(sol.u[i][:,3])  sol.u[i][:,1] .* sin.(sol.u[i][:,2]) .* sin.(sol.u[i][:,3])  sol.u[i][:,1] .* cos.(sol.u[i][:,2])] for i in 1:length(sol.u)]
-
     
     v = [[cos.(sol.u[i][:,3]) .* (sin.(sol.u[i][:,2]) .* v_pl[i][:,1] .+ cos.(sol.u[i][:,2]) .* v_pl[i][:,2]) .- sin.(sol.u[i][:,2]) .* sin.(sol.u[i][:,3]) .* v_pl[i][:,3] ./ sin.(sol.u[i][:,2])  sin.(sol.u[i][:,3]) .* (sin.(sol.u[i][:,2]) .* v_pl[i][:,1] .+ cos.(sol.u[i][:,2]) .* v_pl[i][:,2]) .+ sin.(sol.u[i][:,2]) .* cos.(sol.u[i][:,3]) .* v_pl[i][:,3] ./ sin.(sol.u[i][:,2])   cos.(sol.u[i][:,2]) .* v_pl[i][:,1] .-  sin.(sol.u[i][:,2]) .* v_pl[i][:,2] ] for i in 1:length(sol.u)]
     
@@ -378,12 +405,19 @@ end
 function g_schwartz(x0, Mass_NS; rNS=10.0)
     # (1 - r_s / r)
     # notation (-,+,+,+), upper g^mu^nu
-    rs = 2 * GNew .* Mass_NS ./ c_km.^2 .* ones(length(x0[:,1]))
+    
     r = x0[:,1]
     
+    #Mass_NS = Mass_NS_in#*ones(length(r))
+    # Mass_NS[r .< rNS] = Mass_NS_in*r[r .< rNS].^3/rNS^3
+
+    rs = 2 * GNew .* Mass_NS ./ c_km.^2
+
     # turn off GR inside NS
-    rs[r .<= rNS] .= 0.0
-    
+    # rs[r .<= rNS] .= 0.0
+    #!!!!!!!
+
+
     sin_theta = sin.(x0[:,2])
     g_tt = -1.0 ./ (1.0 .- rs ./ r);
     g_rr = (1.0 .- rs ./ r);
@@ -431,16 +465,16 @@ end
 
 function k_norm_Cart(x0, khat,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; melrose=false, flat=false, isotropic=false)
     
+    # Switch to polar coordinates
+    rr = sqrt.(sum(x0.^2, dims=2))
+    # r theta phi
+    x0_pl = [rr acos.(x0[:,3] ./ rr) atan.(x0[:,2], x0[:,1])]
+
     if flat
         Mass_NS = 0.0
     end
     
     r_s0 = 2.0 * Mass_NS * GNew / c_km^2
-
-    # Switch to polar coordinates
-    rr = sqrt.(sum(x0.^2, dims=2))
-    # r theta phi
-    x0_pl = [rr acos.(x0[:,3] ./ rr) atan.(x0[:,2], x0[:,1])]
     
     # vr, vtheta, vphi --- Define lower momenta and upper indx pos
     # [unitless, unitless, unitless ]
