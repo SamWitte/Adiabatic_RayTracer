@@ -153,6 +153,8 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   
   #DEBUG
   print("Initial conversion probability: ", Prob, "\n")
+  print("prob_cutoff: ", prob_cutoff, "\n")
+  print("num_cutoff: ", num_cutoff, "\n")
 
   while length(events) > 0
     
@@ -174,14 +176,14 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
                [erg_inf_ini], flat, isotropic, melrose]
       x_e, k_e, t_e, err_e, cut_short, xc, yc, zc, kxc, kyc, kzc = RT.propagate(
                       func_use_SPHERE, pos0, k0,
-                      1000, Mvars, NumerPass, RT.func!,
+                      200, Mvars, NumerPass, RT.func!,
                       true, false, Mass_a, splittings_cutoff)
     else      
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose, Mass_a]
       x_e, k_e, t_e, err_e, cut_short, xc, yc, zc, kxc, kyc, kzc = RT.propagate(
                         func_use_SPHERE, pos0, k0,
-                        1000, Mvars, NumerPass, RT.func_axion!,
+                        200, Mvars, NumerPass, RT.func_axion!,
                         true, true, Mass_a, splittings_cutoff)
     end
     pos = transpose(x_e[1, :, :])
@@ -263,6 +265,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
       end
 
       # Add all crossings to the tree
+      print("Number of crossings: ", Nc, "\n") #DEBUG
       for j in 1:Nc 
         #if Prob[j]*event.weight > prob_cutoff # Cutoff
           push!(events, RT.node(xc[j], yc[j], zc[j], kxc[j], kyc[j],
@@ -512,5 +515,68 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           photon_trajs += 1
         end
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    end
+end
+
+
+function single_runner(species, x0, y0, z0, kx0, ky0, kz0,
+    Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
+    Ntajs, gammaF, batchsize; flat=true, isotropic=false, melrose=false,
+    ode_err=1e-5, cutT=100000, fix_time=Nothing, CLen_Scale=true, file_tag="",
+    ntimes=1000, v_NS=[0 0 0], rho_DM=0.3, save_more=false, vmean_ax=220.0,
+    ntimes_ax=10000, dir_tag="results", iseed=-1, num_cutoff=5,
+    prob_cutoff=1e-10, info_level=5,
+    forwards=true)
+
+    rmag = sqrt(x0^2 + y0^2 + z0^2)
+    vmag = sqrt.(2 * GNew .* Mass_NS ./ rmag) ; # km/s
+    
+    # resample angle (this will be axion velocity at conversion surface)
+    #θi = acos.(1.0 .- 2.0 .* rand(length(rmag)));
+    #ϕi = rand(length(rmag)) .* 2π;
+    #newV = [sin.(θi) .* cos.(ϕi) sin.(θi) .* sin.(ϕi) cos.(θi)];
+    
+    # define angle between surface normal and velocity
+    #calpha = RT.surfNorm(xpos_flat, newV, [func_use, [θm, ωPul, B0, rNS,
+    #          gammaF, zeros(batchsize), Mass_NS]], return_cos=true); # alpha
+    #weight_angle = abs.(calpha);
+
+    # sample asymptotic velocity
+    vIfty=erfinv.(2 .* rand(length(vmag),3) .- 1.) .* vmean_ax .+ v_NS#km/s
+    vIfty_mag = sqrt.(sum(vIfty.^2));
+    #vel_eng = sum((vIfty ./ 2.998e5).^ 2, dims = 2) ./ 2;
+    gammaA = 1 ./ sqrt.(1.0 .- (vIfty_mag ./ c_km).^2 )
+    erg_inf_ini = Mass_a .* sqrt.(1 .+ (vIfty_mag ./ c_km .* gammaA).^2)
+        
+    # define min and max time to propagate photons
+    ln_t_start = -22;
+    ln_t_end = log.(1 ./ ωPul);
+    NumerPass = vec([ln_t_start, ln_t_end, ode_err])
+
+    # Normalise k
+    norm = sqrt(kx0^2 + ky0^2 + kz0^2)
+    kx0 = kx0/norm
+    ky0 = ky0/norm
+    kz0 = kz0/norm
+
+    if forwards
+      parent = RT.node(x0, y0, z0, kx0, ky0, kz0,
+            species, 1.0, 1.0, -1.0, [], [], [], [])
+      tree = get_tree(parent,erg_inf_ini,vIfty_mag,
+            Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
+            flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
+            num_cutoff=num_cutoff)
+      saveTree(tree, dir_tag * "/forward_" * file_tag * "single",
+               info_level)
+    else
+      parent = RT.node(x0, y0, z0, kx0, ky0, kz0,
+            species, 1.0, 1.0, -1.0, [], [], [], [])
+      tree_backwards = get_tree(parent,erg_inf_ini,vIfty_mag,
+            Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
+            flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
+            num_cutoff=num_cutoff)
+      saveTree(tree_backwards,
+               dir_tag * "/backward_" * file_tag * "single",
+              info_level)
     end
 end

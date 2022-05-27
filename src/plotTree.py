@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
-cutoff = 0
+cutoff = -1
 
 
 fontsize = 12
@@ -81,8 +81,8 @@ def load_tree(filename):
 plot = True
 savefig = True
 showfig = True
-runs = range(1, 4)
-#runs = [34]
+runs = range(1, 10)
+runs = [2]
 
 list_p_naive = [[], [], []]
 list_p_in = [[], [], []]
@@ -95,8 +95,8 @@ for num in runs:
 
     print("\n--------- num: %i ---------"%(num))
         
-    tree = load_tree("results/forward__3__GR_%i"%(num))
-    tree_b = load_tree("results/backward__3__GR_%i"%(num))
+    tree = load_tree("results/forward__GR_%i"%(num))
+    tree_b = load_tree("results/backward__GR_%i"%(num))
 
     if plot:
         fig = plt.figure(figsize=(9, 7))
@@ -158,10 +158,14 @@ for num in runs:
         c = "C0"
 
         cmap = plt.get_cmap("copper").reversed()
-        vmin = np.log10(np.min([n["weight"] for n in tree]))
-        vmin = min(vmin, np.log10(np.min([n["weight"] for n in tree_b])))
-        print(vmin)
-        def get_color(w):
+        vmin = np.log10(np.abs(np.min([n["weight"] for n in tree])))
+        vmin = min(vmin, np.log10(np.abs(np.min([n["weight"] for n in tree_b]))))
+        if vmin == -np.inf: vmin = -10
+        print("vmin:", vmin)
+        def get_color(w0):
+            w = w0
+            if w0 == 0: w = 1e-10
+            print(w)
             vmax = 0
             lw = np.log10(w)
             f = (lw - vmin)/(vmax - vmin)
@@ -349,6 +353,7 @@ for num in runs:
 
 if plot and showfig:
     plt.show()
+fig2d.close()
 
 print("Summary: ")
 print(" Photons out in naive approach:      %.2e"%(np.mean(list_p_naive[0])))

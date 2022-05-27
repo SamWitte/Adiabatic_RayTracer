@@ -81,10 +81,11 @@ function parse_commandline()
         "--vNS_z"
             arg_type = Float64
             default = 0.0
+        ########################################################################
         # ---- Tree parameters ----
         # create tree or standard run (call main_runner or main_runner_tree)
-        # 1->tree, 0->standard
-        "--tree"
+        # 0->standard, 1->tree, 2->single event with init conditions, tree
+        "--type"
             arg_type = Int
             default = 0
         # seed
@@ -97,6 +98,37 @@ function parse_commandline()
         "--infoLevel"
             arg_type = Int
             default = 5
+        "--probCutoff"
+            arg_type = Float64
+            default = 1e-10
+        "--numCutoff"
+            arg_type = Int
+            default = 5
+        # ---- parameters for single run ----
+        "--species"
+            arg_type = String
+            default = "axion"
+        "--x0"
+            arg_type = Float64
+            default = 100.
+        "--y0"
+            arg_type = Float64
+            default = 100.
+        "--z0"
+            arg_type = Float64
+            default = 100.
+        "--kx0"
+            arg_type = Float64
+            default = -1.
+        "--ky0"
+            arg_type = Float64
+            default = -1.
+        "--kz0"
+            arg_type = Float64
+            default = -1.
+        "--forward" 
+            arg_type = Bool
+            default = true
     end
 
     return parse_args(s)
@@ -129,8 +161,16 @@ ntimes_ax = 10000; # vector scan for resonance
 
 # Tree parameters
 info_level = parsed_args["infoLevel"]
-num_cutoff = 5
-prob_cutoff = 1e-6
+num_cutoff = parsed_args["numCutoff"]
+prob_cutoff = parsed_args["probCutoff"]
+# Single run parameters
+species = parsed_args["species"]
+x0 = parsed_args["x0"]
+y0 = parsed_args["y0"]
+z0 = parsed_args["z0"]
+kx0 = parsed_args["kx0"]
+ky0 = parsed_args["ky0"]
+kz0 = parsed_args["kz0"]
 
 print("Parameters: ", Mass_a, "\n")
 print(Ax_g, "\n")
@@ -148,13 +188,13 @@ print(cutT, "\n")
 time0=Dates.now()
 
 if parsed_args["run_RT"] == 1
-  if parsed_args["tree"] == 0
+  if parsed_args["type"] == 0
     @inbounds @fastmath main_runner(Mass_a, Ax_g, θm, ωPul, B0, rNS,
               Mass_NS, ωProp, Ntajs, gammaF, batchSize;
               flat=flat, isotropic=isotropic, melrose=melrose, ode_err=ode_err,
               cutT=cutT, fix_time=fix_time, CLen_Scale=CLen_Scale,
               file_tag=file_tag, ntimes=ntimes, v_NS=vNS, ntimes_ax=ntimes_ax);
-  else
+  elseif parsed_args["type"] == 0
     @inbounds @fastmath main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS,
               Mass_NS, ωProp, Ntajs, gammaF, batchSize;
               flat=flat, isotropic=isotropic, melrose=melrose, ode_err=ode_err,
@@ -162,6 +202,17 @@ if parsed_args["run_RT"] == 1
               file_tag=file_tag, ntimes=ntimes, v_NS=vNS, ntimes_ax=ntimes_ax,
               info_level=info_level, num_cutoff=num_cutoff, 
               prob_cutoff=prob_cutoff)
+  else 
+    @inbounds @fastmath single_runner(
+              species, x0, y0, z0, kx0, ky0, kz0,
+              Mass_a, Ax_g, θm, ωPul, B0, rNS,
+              Mass_NS, ωProp, Ntajs, gammaF, batchSize;
+              flat=flat, isotropic=isotropic, melrose=melrose, ode_err=ode_err,
+              cutT=cutT, fix_time=fix_time, CLen_Scale=CLen_Scale,
+              file_tag=file_tag, ntimes=ntimes, v_NS=vNS, ntimes_ax=ntimes_ax,
+              info_level=info_level, num_cutoff=num_cutoff, 
+              prob_cutoff=prob_cutoff, forwards=parsed_args["forward"])
+
   end
 end
 
