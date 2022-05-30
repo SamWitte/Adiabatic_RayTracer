@@ -342,7 +342,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     # print(sum(sol.u[end][:,1] .< 1e4), "\t", sol.u[end][:,1] , "\n")
     # Calculate the total particle energies (unitless); this is later used to find the resonance and should be constant along the trajectory
     #for i in 1:length(sol.u)
-    #    sol.u[i][sol.u[i][:,1] .<= r_s[:,i], 1] .= 2.0 .* Mass_NS .* GNew ./ c_km^2 .+ 1e-10
+    #   sol.u[i][sol.u[i][:,1] .<= r_s[:,i], 1] .= 2.0 .* Mass_NS .* GNew ./ c_km^2 .+ 1e-10
     #end
     #ω = [(1.0 .- r_s[:,i] ./ sol.u[i][:,1]) for i in 1:length(sol.u)]
     ω = [(1.0 .- r_s[i] ./ sol.u[i][:,1]) for i in 1:length(sol.u)]

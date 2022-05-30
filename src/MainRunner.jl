@@ -118,7 +118,7 @@ end
 
 function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,flat,isotropic,melrose,
-    NumerPass; num_cutoff=5, prob_cutoff=1e-10)
+    NumerPass; num_cutoff=5, prob_cutoff=1e-10,splittings_cutoff=-1)
 
   # Accuracy parameters 
   # -------------------
@@ -131,7 +131,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   #num_main           = 5       # Max number of escaped main branch particles
   # ^^^^^^^^^^^^^^^^^^^
 
-  splittings_cutoff = -1 # The code is no longer optimal for a different number
+  #splittings_cutoff = -1 # The code is no longer optimal for a different number
 
   # Initial conversion probability
   pos = [first.x first.y first.z]
@@ -495,17 +495,19 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           saveTree(tree, dir_tag * "/forward_" * file_tag * string(photon_trajs),
                    info_level)
 
-
-
           print(i, " backward in time\n---------------------\n")
           # Backwards in time equivalent to setting k->-k and vecB->-vecB (???)
           parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
                 -k_init[i, 1], -k_init[i, 2], -k_init[i, 3],
                 "axion", 1.0, 1.0, -1.0, [], [], [], [])
+          # The simplest is always the best: make use of existing code
+          # Find all crossings of the axion backwards in time
           tree_backwards = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
                 flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
-                num_cutoff=num_cutoff)
+                num_cutoff=1)
+          
+
           printTree(tree_backwards)    
           saveTree(tree_backwards,
                    dir_tag * "/backward_" * file_tag * string(photon_trajs),
