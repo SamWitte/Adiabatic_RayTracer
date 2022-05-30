@@ -163,6 +163,7 @@ ntimes_ax = 10000; # vector scan for resonance
 info_level = parsed_args["infoLevel"]
 num_cutoff = parsed_args["numCutoff"]
 prob_cutoff = parsed_args["probCutoff"]
+seed = parsed_args["seed"]
 # Single run parameters
 species = parsed_args["species"]
 x0 = parsed_args["x0"]
@@ -194,14 +195,14 @@ if parsed_args["run_RT"] == 1
               flat=flat, isotropic=isotropic, melrose=melrose, ode_err=ode_err,
               cutT=cutT, fix_time=fix_time, CLen_Scale=CLen_Scale,
               file_tag=file_tag, ntimes=ntimes, v_NS=vNS, ntimes_ax=ntimes_ax);
-  elseif parsed_args["type"] == 0
+  elseif parsed_args["type"] == 1
     @inbounds @fastmath main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS,
               Mass_NS, ωProp, Ntajs, gammaF, batchSize;
               flat=flat, isotropic=isotropic, melrose=melrose, ode_err=ode_err,
               cutT=cutT, fix_time=fix_time, CLen_Scale=CLen_Scale,
               file_tag=file_tag, ntimes=ntimes, v_NS=vNS, ntimes_ax=ntimes_ax,
               info_level=info_level, num_cutoff=num_cutoff, 
-              prob_cutoff=prob_cutoff)
+              prob_cutoff=prob_cutoff, iseed=seed)
   else 
     @inbounds @fastmath single_runner(
               species, x0, y0, z0, kx0, ky0, kz0,
@@ -210,7 +211,7 @@ if parsed_args["run_RT"] == 1
               flat=flat, isotropic=isotropic, melrose=melrose, ode_err=ode_err,
               cutT=cutT, fix_time=fix_time, CLen_Scale=CLen_Scale,
               file_tag=file_tag, ntimes=ntimes, v_NS=vNS, ntimes_ax=ntimes_ax,
-              info_level=info_level, num_cutoff=num_cutoff, 
+              info_level=info_level, num_cutoff=num_cutoff, iseed=seed, 
               prob_cutoff=prob_cutoff, forwards=parsed_args["forward"])
 
   end
