@@ -539,9 +539,9 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
             nb.xc = [xpos_flat[i, 1]]
             nb.yc = [xpos_flat[i, 2]]
             nb.zc = [xpos_flat[i, 3]]
-            nb.kxc = [k_init[i, 1]]
-            nb.kyc = [k_init[i, 2]]
-            nb.kzc = [k_init[i, 3]]
+            nb.kxc = [-k_init[i, 1]]
+            nb.kyc = [-k_init[i, 2]] # "-" since it was backtraced
+            nb.kzc = [-k_init[i, 3]]
             nb.Pc  = [nb.prob]
           end
           species = ["axion*" "photon"]
@@ -549,9 +549,9 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           for j in [1 2]
             if probs[j] > prob_cutoff
               parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
-                               -nb.kxc[end], -nb.kyc[end], -nb.kzc[end],
-                               species[j], probs[j], probs[j], 1.0,
-                             [],[],[],[],[],[],[],[])
+                          -nb.kxc[end], -nb.kyc[end], -nb.kzc[end], # to forward
+                          species[j], probs[j], probs[j], 1.0,
+                          [],[],[],[],[],[],[],[])
               tree = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                   Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
                   flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
