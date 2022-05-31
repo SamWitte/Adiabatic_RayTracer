@@ -487,45 +487,19 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
 
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         # to-do: 
-        #  - Check physics of EoM backwards in time
         #  - Check physics of EoM of axion
         
-
-        #vmag_tot = sqrt.(vmag .^ 2 .+ vIfty_mag.^2); # km/s
-        #Bvec, ωp = RT.GJ_Model_vec(xpos_flat, zeros(batchsize), θm, ωPul, B0,
-        #                           rNS);
-        #Bmag = sqrt.(sum(Bvec .* Bvec, dims=2))
-        #cθ = sum(newV .* Bvec, dims=2) ./ Bmag
-
-        #erg_ax = erg_inf_ini./sqrt.(1.0 .- 2*GNew .* Mass_NS ./ rmag ./ c_km.^2)
-        #B_tot = Bmag .* (1.95e-20) ; # GeV^2
-        
-        #MagnetoVars =  [θm, ωPul, B0, rNS, [1.0 1.0], zeros(batchsize), erg_ax]
-        #sln_δk = RT.dk_ds(xpos_flat, k_init, [func_use, MagnetoVars]);
-        #conversion_F = sln_δk ./  (6.58e-16 .* 2.998e5) # 1/km^2;
-        
-        # compute conversion prob
-        #Prob_nonAD = π ./ 2 .* (Ax_g .* B_tot) .^2 ./ conversion_F .*
-        #            (1e9 .^2) ./ (vmag_tot ./ 2.998e5) .^2 ./
-        #            ((2.998e5 .* 6.58e-16) .^2) ./ sin.(acos.(cθ)).^4; #unitless
-        #Prob = (1.0 .- exp.(-Prob_nonAD));
-        #print("Mean conversion probability:    ", sum(Prob) / length(Prob),"\n")
-        #min_prob = findmin(Prob)[1]
-        #print("Minimum conversion probability: ", findmin(Prob)[1], "\n")
-        #print("Maximum conversion probability: ", findmax(Prob)[1], "\n")
-
-        for i in 1:batchsize
+        for i in 3:batchsize
           fname = dir_tag * "/tree_" * file_tag * string(photon_trajs) 
-          #TODO: Set weights correctly! 
           f = open(fname, "w")
 
 
-          print(i, " backward in time\n---------------------\n") # DEBUG
+          print(photon_trajs, " backward in time\n------------------\n") # DEBUG
           # Find previous crossings...
           # Backwards in time equivalent to setting k->-k and vecB->-vecB (???)
           parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
                 -k_init[i, 1], -k_init[i, 2], -k_init[i, 3],
-                "axion*", 1.0, 1.0, -1.0, [],[],[],[],[],[],[],[])
+                "photon", 1.0, 1.0, -1.0, [],[],[],[],[],[],[],[])
           # The simplest is always the best: make use of existing code
           nb = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
@@ -533,7 +507,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                 num_cutoff=0, splittings_cutoff=100000, ax_num=100)[1]
           saveNode(f, nb)
 
-          print(i, " forward in time\n----------------\n") #DEBUG
+          print(photon_trajs, " forward in time\n--------------------\n") #DEBUG
           # Forward propagation of a photon from the last node
           if length(nb.xc) == 0
             nb.xc = [xpos_flat[i, 1]]
@@ -547,7 +521,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           species = ["axion*" "photon"]
           probs = [1 - nb.Pc[end], nb.Pc[end]]
           for j in [1 2]
-            if probs[j] > prob_cutoff
+            if probs[j] > prob_cutoff # Skip if unlikely
               parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
                           -nb.kxc[end], -nb.kyc[end], -nb.kzc[end], # to forward
                           species[j], probs[j], probs[j], 1.0,
@@ -561,57 +535,6 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
               end
             end
           end
-
-          #=
-          print(i, " backward in time\n---------------------\n") # DEBUG
-          # Find previous crossings...
-          # Backwards in time equivalent to setting k->-k and vecB->-vecB (???)
-          parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
-                -k_init[i, 1], -k_init[i, 2], -k_init[i, 3],
-                "axion*", 1.0, 1.0, -1.0, [],[],[],[],[],[],[],[])
-          # The simplest is always the best: make use of existing code
-          nb = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
-                Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
-                flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
-                num_cutoff=0, splittings_cutoff=100000)[1]
-          saveNode(f, nb)
-
-          print(i, " forward in time from each node\n----------------\n") #DEBUG
-          # Forward propagation of a photon from each of the nodes
-          Prob = 1
-          for j in length(nb.xc):1
-            Prob *= nb.Pc[i]
-            parent = RT.node( nb.xc[j],   nb.yc[j],   nb.zc[j],
-                             -nb.kxc[j], -nb.kyc[j], -nb.kzc[j],
-                             "photon", nb.Pc[i], Prob, -1.0,
-                             [],[],[],[],[],[],[],[])
-            tree = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
-                Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
-                flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
-                num_cutoff=num_cutoff)
-            for j in 1:length(tree)
-              saveNode(f, tree[j])
-            end
-          end
-
-          print(i, " forward in time from sampling\n-----------------\n") #DEBUG
-          # Star -> main axion; like Y-cromosome in splittings
-          # Forward propagation
-          for species in ["photon" "axion*"]
-            parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
-                  k_init[i, 1], k_init[i, 2], k_init[i, 3],
-                  species, 1.0, 1.0, -1.0, [],[],[],[],[],[],[],[])
-                                 # Parent weight: -1 indicates first
-                                 # The last 7 elements are updated in "get_tree"
-            tree = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
-                  Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
-                  flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
-                  num_cutoff=num_cutoff)
-            for j in 1:length(tree)
-              saveNode(f, tree[j])
-            end
-          end
-          =#
 
           photon_trajs += 1
 

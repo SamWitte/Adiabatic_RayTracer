@@ -74,12 +74,12 @@ def load_tree(filename):
                     [float(n) for n in f.readline().strip().split()])
             tree[i]["r"] = (tree[i]["x"]**2 + tree[i]["y"]**2 +
                             tree[i]["z"]**2)**.5
-            tree[i]["NS"] = True if np.min(tree[i]["r"]) < 1.1*r_NS else False
+            tree[i]["NS"] = True if np.min(tree[i]["r"]) < 1.01*r_NS else False
             line = f.readline()
     return tree
 
         
-tree = load_tree("results/tree__GR_5")
+tree = load_tree("results/tree__GR_1")
 
 fig = plt.figure(figsize=(9, 7))
 ax = plt.axes(projection='3d')
