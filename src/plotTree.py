@@ -138,9 +138,9 @@ vmin = np.log10(np.abs(np.min([n["weight"] for n in tree])))
 if vmin == -np.inf: vmin = -10
 print("vmin:", vmin)
 def get_color(w0):
+    if w0 == 1.0: return "k"
     w = w0
     if w0 == 0: w = 1e-10
-    print(w)
     vmax = 0
     lw = np.log10(w)
     f = (lw - vmin)/(vmax - vmin)

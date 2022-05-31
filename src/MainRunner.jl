@@ -496,10 +496,10 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
 
           print(photon_trajs, " backward in time\n------------------\n") # DEBUG
           # Find previous crossings...
-          # Backwards in time equivalent to setting k->-k and vecB->-vecB (???)
+          # Backwards in time equivalent to setting k->-k and vecB->-vecB
           parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
                 -k_init[i, 1], -k_init[i, 2], -k_init[i, 3],
-                "photon", 1.0, 1.0, -1.0, [],[],[],[],[],[],[],[])
+                "axion", 1.0, 1.0, -1.0, [],[],[],[],[],[],[],[])
           # The simplest is always the best: make use of existing code
           nb = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
