@@ -20,17 +20,17 @@ function saveTree(n::Array, filename::String="tree.txt", info_level::Int=5)
           write(f, n[i].species, " ", string(n[i].weight), " ",
                 string(n[i].prob), " ",
                 string(n[i].parent_weight), "\n")
-          if length(n[i].level_crossings_x) > 0
-            for j in 1:length(n[i].level_crossings_x)
-              write(f, " ", string(n[i].level_crossings_x[j]))
+          if length(n[i].xc) > 0
+            for j in 1:length(n[i].xc)
+              write(f, " ", string(n[i].xc[j]))
             end
             write(f, "\n")
-            for j in 1:length(n[i].level_crossings_y)
-              write(f, " ", string(n[i].level_crossings_y[j]))
+            for j in 1:length(n[i].yc)
+              write(f, " ", string(n[i].yc[j]))
             end
             write(f, "\n")
-            for j in 1:length(n[i].level_crossings_z)
-              write(f, " ", string(n[i].level_crossings_z[j]))            
+            for j in 1:length(n[i].zc)
+              write(f, " ", string(n[i].zc[j]))            
             end
           else
             write(f, "-\n-\n-")
@@ -78,7 +78,7 @@ function saveTree(n::Array, filename::String="tree.txt", info_level::Int=5)
          )
         for i in 2:length(n)
           # Only store if it is an outgoing particle
-          if length(n[i].level_crossings_x) == 0
+          if length(n[i].xc) == 0
             write(f, n[i].species, " ", string(n[i].weight), " ",
                 string(n[i].prob), " ", string(n[i].parent_weight), "\n")
           end
@@ -88,6 +88,48 @@ function saveTree(n::Array, filename::String="tree.txt", info_level::Int=5)
       print("UNKNOWN INFOLEVEL ", info_level, " IN saveTree.")
       print("\nThe data is not stored!!!!! \n")
     end
+end
+
+function saveNode(f, n)
+  write(f, n.species, " ", string(n.weight), " ",
+              string(n.prob), " ", string(n.parent_weight), "\n")
+  if length(n.xc) > 0
+    for j in 1:length(n.xc)
+      write(f, " ", string(n.xc[j]))
+    end
+    write(f, "\n")
+    for j in 1:length(n.yc)
+       write(f, " ", string(n.yc[j]))
+    end
+    write(f, "\n")
+    for j in 1:length(n.zc)
+       write(f, " ", string(n.zc[j]))            
+    end
+  else
+    write(f, "-\n-\n-")
+  end
+  write(f, "\n")
+  if length(n.traj) > 0
+    for j in 1:length(n.traj[:, 1])
+      write(f, " ", string(n.traj[j, 1]))
+    end
+    write(f, "\n")
+    for j in 1:length(n.traj[:, 2])
+      write(f, " ", string(n.traj[j, 2]))
+    end
+    write(f, "\n")
+    for j in 1:length(n.traj[:, 3])
+      write(f, " ", string(n.traj[j, 3]))
+    end
+    write(f, "\n")
+  else
+    write(f, string(n.x))
+    write(f, "\n")
+    write(f, string(n.y))
+    write(f, "\n")
+    write(f, string(n.z))
+    write(f, "\n")
+  end
 end
 
 function get_Prob_nonAD(pos::Array, kpos::Array,
@@ -118,7 +160,8 @@ end
 
 function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,flat,isotropic,melrose,
-    NumerPass; num_cutoff=5, prob_cutoff=1e-10,splittings_cutoff=-1)
+    NumerPass; num_cutoff=5, prob_cutoff=1e-10,splittings_cutoff=-1,
+    ax_num=100)
 
   # Accuracy parameters 
   # -------------------
@@ -176,14 +219,14 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
                [erg_inf_ini], flat, isotropic, melrose]
       x_e, k_e, t_e, err_e, cut_short, xc, yc, zc, kxc, kyc, kzc = RT.propagate(
                       func_use_SPHERE, pos0, k0,
-                      2000, Mvars, NumerPass, RT.func!,
+                      ax_num, Mvars, NumerPass, RT.func!,
                       true, false, Mass_a, splittings_cutoff)
     else      
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose, Mass_a]
       x_e, k_e, t_e, err_e, cut_short, xc, yc, zc, kxc, kyc, kzc = RT.propagate(
                         func_use_SPHERE, pos0, k0,
-                        2000, Mvars, NumerPass, RT.func_axion!,
+                        ax_num, Mvars, NumerPass, RT.func_axion!,
                         true, true, Mass_a, splittings_cutoff)
     end
     pos = transpose(x_e[1, :, :])
@@ -230,38 +273,30 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
         end
       end
 
-      # find level crossings OLD
-      #logdiff = (log.(RT.GJ_Model_ωp_vec(pos, 0.0, θm, ωPul, B0, rNS))
-      #           .- log.(Mass_a))
-      #cxing_st = RT.get_crossings(logdiff)
-      #xpos = RT.apply(cxing_st,  pos[:, 1])
-      #ypos = RT.apply(cxing_st,  pos[:, 2])
-      #zpos = RT.apply(cxing_st,  pos[:, 3])
-      #kx = RT.apply(cxing_st,  kpos[:, 1])
-      #ky = RT.apply(cxing_st,  kpos[:, 2])
-      #kz = RT.apply(cxing_st,  kpos[:, 3])
-      
+      # store level crossings
       Nc = length(xc)
       pos = zeros(Nc, 3);
       pos[:, 1] .= xc; pos[:, 2] = yc; pos[:, 3] = zc
       kpos = zeros(Nc, 3);
       kpos[:, 1] .= kxc; kpos[:, 2] .= kyc; kpos[:, 3] .= kzc
-      
-      event.level_crossings_x = xc
-      event.level_crossings_y = yc
-      event.level_crossings_z = zc
-
+      event.xc = xc
+      event.yc = yc
+      event.zc = zc
+      event.kxc = kxc
+      event.kyc = kyc
+      event.kzc = kzc
 
       # Conversion probability
       Prob_nonAD = get_Prob_nonAD(pos,kpos,Mass_a,Ax_g,θm,ωPul,B0,rNS,
                                   erg_inf_ini, vIfty_mag)
       Prob = 1 .- exp.(-Prob_nonAD)
+      event.Pc = Prob
 
       # Find "ID" of new particle              
-      if event.species == "axion"
-        new_species = "photon"
-      elseif event.species == "photon"
+      if event.species == "photon"
         new_species = "axion"
+      else
+        new_species = "photon"
       end
 
       # Add all crossings to the tree
@@ -270,16 +305,16 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
         #if Prob[j]*event.weight > prob_cutoff # Cutoff
           push!(events, RT.node(xc[j], yc[j], zc[j], kxc[j], kyc[j],
                     kzc[j], new_species, Prob[j],
-                    Prob[j]*event.weight, event.weight, [], [], [], []))
+                    Prob[j]*event.weight, event.weight,[],[],[],[],[],[],[],[]))
           if splittings_cutoff <= 0 
             push!(events, RT.node(xc[j], yc[j], zc[j], kxc[j], kyc[j],
-                    kzc[j], event.species, 1-Prob[j],
-                    (1 - Prob[j])*event.weight, event.weight, [], [], [], []))
-          end
+                kzc[j], event.species, 1-Prob[j],
+                (1-Prob[j])*event.weight, event.weight,[],[],[],[],[],[],[],[]))
+          else
         #end
-
-        # Re-evaluate weight of parent
-        event.weight = event.weight*(1-Prob[j])
+            # Re-evaluate weight of parent
+            event.weight = event.weight*(1-Prob[j])
+          end
       end
       
       if splittings_cutoff > 0 # Only final particles should count
@@ -295,9 +330,9 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     if tot_prob >= 1 - prob_cutoff
       break
     end
-    #if count >= num_cutoff
-    #  break
-    #end
+    if num_cutoff <= 0 && splittings_cutoff > 0
+      break
+    end
     if count_main >= num_cutoff
       break
     end
@@ -452,7 +487,6 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
 
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         # to-do: 
-        #  - reduced effective mass of NS when the axion passes through
         #  - Check physics of EoM backwards in time
         #  - Check physics of EoM of axion
         
@@ -481,41 +515,110 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         #print("Maximum conversion probability: ", findmax(Prob)[1], "\n")
 
         for i in 1:batchsize
-          parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
-                k_init[i, 1], k_init[i, 2], k_init[i, 3],
-                "photon", 1.0, 1.0, -1.0, [], [], [], [])
-                               # Parent weight: -1 indicates first
-                               # The last 7 elements are updated in "get_tree"
-          print(i, " forward in time\n---------------------\n")
-          tree = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
-                Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
-                flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
-                num_cutoff=num_cutoff)
-          printTree(tree)
-          saveTree(tree, dir_tag * "/forward_" * file_tag * string(photon_trajs),
-                   info_level)
+          fname = dir_tag * "/tree_" * file_tag * string(photon_trajs) 
+          #TODO: Set weights correctly! 
+          f = open(fname, "w")
 
-          print(i, " backward in time\n---------------------\n")
+
+          print(i, " backward in time\n---------------------\n") # DEBUG
+          # Find previous crossings...
           # Backwards in time equivalent to setting k->-k and vecB->-vecB (???)
           parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
                 -k_init[i, 1], -k_init[i, 2], -k_init[i, 3],
-                "axion", 1.0, 1.0, -1.0, [], [], [], [])
+                "axion*", 1.0, 1.0, -1.0, [],[],[],[],[],[],[],[])
           # The simplest is always the best: make use of existing code
-          # Find all crossings of the axion backwards in time
-          tree_backwards = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
+          nb = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
                 flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
-                num_cutoff=1)
-          
+                num_cutoff=0, splittings_cutoff=100000, ax_num=100)[1]
+          saveNode(f, nb)
 
-          printTree(tree_backwards)    
-          saveTree(tree_backwards,
-                   dir_tag * "/backward_" * file_tag * string(photon_trajs),
-                  info_level)
+          print(i, " forward in time\n----------------\n") #DEBUG
+          # Forward propagation of a photon from the last node
+          if length(nb.xc) == 0
+            nb.xc = [xpos_flat[i, 1]]
+            nb.yc = [xpos_flat[i, 2]]
+            nb.zc = [xpos_flat[i, 3]]
+            nb.kxc = [k_init[i, 1]]
+            nb.kyc = [k_init[i, 2]]
+            nb.kzc = [k_init[i, 3]]
+            nb.Pc  = [nb.prob]
+          end
+          species = ["axion*" "photon"]
+          probs = [1 - nb.Pc[end], nb.Pc[end]]
+          for j in [1 2]
+            if probs[j] > prob_cutoff
+              parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
+                               -nb.kxc[end], -nb.kyc[end], -nb.kzc[end],
+                               species[j], probs[j], probs[j], 1.0,
+                             [],[],[],[],[],[],[],[])
+              tree = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
+                  Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
+                  flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
+                  num_cutoff=num_cutoff,ax_num=100)
+              for ii in 1:length(tree)
+                saveNode(f, tree[ii])
+              end
+            end
+          end
 
+          #=
+          print(i, " backward in time\n---------------------\n") # DEBUG
+          # Find previous crossings...
+          # Backwards in time equivalent to setting k->-k and vecB->-vecB (???)
+          parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
+                -k_init[i, 1], -k_init[i, 2], -k_init[i, 3],
+                "axion*", 1.0, 1.0, -1.0, [],[],[],[],[],[],[],[])
+          # The simplest is always the best: make use of existing code
+          nb = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
+                Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
+                flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
+                num_cutoff=0, splittings_cutoff=100000)[1]
+          saveNode(f, nb)
+
+          print(i, " forward in time from each node\n----------------\n") #DEBUG
+          # Forward propagation of a photon from each of the nodes
+          Prob = 1
+          for j in length(nb.xc):1
+            Prob *= nb.Pc[i]
+            parent = RT.node( nb.xc[j],   nb.yc[j],   nb.zc[j],
+                             -nb.kxc[j], -nb.kyc[j], -nb.kzc[j],
+                             "photon", nb.Pc[i], Prob, -1.0,
+                             [],[],[],[],[],[],[],[])
+            tree = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
+                Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
+                flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
+                num_cutoff=num_cutoff)
+            for j in 1:length(tree)
+              saveNode(f, tree[j])
+            end
+          end
+
+          print(i, " forward in time from sampling\n-----------------\n") #DEBUG
+          # Star -> main axion; like Y-cromosome in splittings
+          # Forward propagation
+          for species in ["photon" "axion*"]
+            parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
+                  k_init[i, 1], k_init[i, 2], k_init[i, 3],
+                  species, 1.0, 1.0, -1.0, [],[],[],[],[],[],[],[])
+                                 # Parent weight: -1 indicates first
+                                 # The last 7 elements are updated in "get_tree"
+            tree = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
+                  Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
+                  flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
+                  num_cutoff=num_cutoff)
+            for j in 1:length(tree)
+              saveNode(f, tree[j])
+            end
+          end
+          =#
 
           photon_trajs += 1
+
+          close(f)
         end
+
+
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     end
 end

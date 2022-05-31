@@ -120,14 +120,17 @@ function func_axion!(du, u, Mvars, lnt)
                     c_km .* t .* (g_rr ./ erg);
         #du[u[:,1] .<= rNS, :] .= 0.0;
         
-        du[:,7 ] .= derivative(tI -> hamiltonian_axion(view(u, :, 1:3), view(u, :, 4:6)  .* erg , tI, erg, θm, ωPul, B0, rNS, Mass_NS, mass_axion, iso=isotropic, melrose=melrose), time[1])[:] .* c_km .* t .* (g_rr[:] ./ erg[:]);
+        du[:,7 ] .= derivative(tI -> hamiltonian_axion(view(u, :, 1:3),
+                    view(u, :, 4:6)  .* erg , tI, erg, θm, ωPul, B0, rNS,
+                    Mass_NS, mass_axion, iso=isotropic, melrose=melrose),
+                    time[1])[:] .* c_km .* t .* (g_rr[:] ./ erg[:]);
         
     end
 end
 
 # Struct for conversion points in trajectory
 mutable struct node
-  x    # Conversion position
+  x    # Conversion position/initial conditions
   y
   z
   kx
@@ -137,9 +140,13 @@ mutable struct node
   prob   # Conversion probability
   weight
   parent_weight
-  level_crossings_x
-  level_crossings_y
-  level_crossings_z
+  xc # Level crossings
+  yc
+  zc
+  kxc
+  kyc
+  kzc
+  Pc # Conversion probability
   traj    # Used to store entire trajectory, not used normally
 end
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -227,7 +234,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
         #end
         #AA = sqrt.(1.0 .- r_s0 ./ u[:, 1])
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        #AA = sqrt.(1.0 .- r_s0 ./ u[:, 1])
+        AA = sqrt.(1.0 .- r_s0 ./ u[:, 1])
         
         test = (erg ./ AA .- GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS)) ./ (erg ./ AA) .+ bounce_threshold # trigger when closer to reflection....
         
@@ -333,18 +340,13 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     #!!!!!!!!
     # Axion can be inside NS
     r = [sol.u[i][1] for i in 1:length(sol.u)]
-    Mass_NS = Mass_NS*ones(length(r))
-    Mass_NS[r .< rNS] = r[r .< rNS].^3/rNS^3
-
+    Mass_NS = Mass_NS*ones(length(r), length(sol.u))
+    for i in 1:length(sol.u)
+      Mass_NS[r .< rNS, i] .= r[r .< rNS].^3/rNS^3
+    end
+    
     # Define the Schwarzschild radii (in km)
     r_s = 2.0 .* ones(length(sol.u[1][:,1]), length(sol.u)) .* Mass_NS .* GNew ./ c_km^2
-    #Mass_NS[r .< 0.5*rNS] .= 0
-    # print(sum(sol.u[end][:,1] .< 1e4), "\t", sol.u[end][:,1] , "\n")
-    # Calculate the total particle energies (unitless); this is later used to find the resonance and should be constant along the trajectory
-    #for i in 1:length(sol.u)
-    #   sol.u[i][sol.u[i][:,1] .<= r_s[:,i], 1] .= 2.0 .* Mass_NS .* GNew ./ c_km^2 .+ 1e-10
-    #end
-    #ω = [(1.0 .- r_s[:,i] ./ sol.u[i][:,1]) for i in 1:length(sol.u)]
     ω = [(1.0 .- r_s[i] ./ sol.u[i][:,1]) for i in 1:length(sol.u)]
 
 
@@ -407,7 +409,8 @@ function g_schwartz(x0, Mass_NS; rNS=10.0)
     # notation (-,+,+,+), upper g^mu^nu
     
     r = x0[:,1]
-    
+   
+    # Reduced NS mass is done elsewhere
     #Mass_NS = Mass_NS_in#*ones(length(r))
     # Mass_NS[r .< rNS] = Mass_NS_in*r[r .< rNS].^3/rNS^3
 

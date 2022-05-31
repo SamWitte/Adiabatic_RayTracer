@@ -78,7 +78,7 @@ def load_tree(filename):
     return tree
 
         
-tree = load_tree("results/forward__GR_single")
+tree = load_tree("results/forward__GR_1")
 
 fig = plt.figure(figsize=(9, 7))
 ax = plt.axes(projection='3d')
