@@ -78,8 +78,11 @@ def load_tree(filename):
             line = f.readline()
     return tree
 
-        
-tree = load_tree("results/tree__GR_1")
+savefig = True
+showfig = True
+
+fname = "tree_med_GR_3"
+tree = load_tree("results/" + fname)
 
 fig = plt.figure(figsize=(9, 7))
 ax = plt.axes(projection='3d')
@@ -202,4 +205,5 @@ ax.plot([], [], linestyle="--", marker="", color="k",
 
 fig.legend()
 
-plt.show()
+if showfig: plt.show()
+if savefig: fig.savefig("figures/" + fname + ".pdf")

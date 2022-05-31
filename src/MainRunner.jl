@@ -489,7 +489,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         # to-do: 
         #  - Check physics of EoM of axion
         
-        for i in 3:batchsize
+        for i in 1:batchsize
           fname = dir_tag * "/tree_" * file_tag * string(photon_trajs) 
           f = open(fname, "w")
 
