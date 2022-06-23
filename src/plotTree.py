@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
-cutoff = -1
+cutoff = 1e-7
 
 
 fontsize = 12
@@ -82,6 +82,7 @@ savefig = True
 showfig = True
 
 fname = "tree_med_GR_3"
+fname = "tree_2e-5_1e-13_GR_46"
 tree = load_tree("results/" + fname)
 
 fig = plt.figure(figsize=(9, 7))
@@ -158,6 +159,7 @@ ax.plot3D(i["crossings_x"], i["crossings_y"], i["crossings_z"],
 ax.plot3D([i["x"][-1]], [i["y"][-1]], [i["z"][-1]],
         linestyle="", marker="s", color="r", markersize=10)
 
+tot_prob = 0
 for i in tree[1:]:
     if i["weight"] < cutoff: continue
     ls = "--" if i["species"][0]=="a" else "-"
@@ -171,7 +173,9 @@ for i in tree[1:]:
     if not i["NS"] and i["final"]:
         ax.plot3D([i["x"][-1]], [i["y"][-1]], [i["z"][-1]],
             linestyle="", marker="s", color="b")
+    if i["final"]: tot_prob += i["weight"]
 
+print(tot_prob)
 
 u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
 x = rNS*np.cos(u)*np.sin(v)

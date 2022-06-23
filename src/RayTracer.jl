@@ -136,6 +136,7 @@ mutable struct node
   kx
   ky
   kz
+  t
   species # Axion or photon?
   prob   # Conversion probability
   weight
@@ -146,9 +147,20 @@ mutable struct node
   kxc
   kyc
   kzc
+  tc
   Pc # Conversion probability
-  traj    # Used to store entire trajectory, not used normally
+  is_final
+  traj    # Used to store entire trajectory
+  mom    # Used to store entire momentum
 end
+# Constructor
+node(x0=0.,y0=0.,z0=0.,kx0=0.,ky0=0.,kz0=0.,t0=0.,species0="axion",prob0=0.,
+     weight0=0.,parent_weight0=0.) = node(x0,y0,z0,kx0,ky0,kz0,t0,species0,
+            prob0,weight0,parent_weight0,[],[],[],[],[],[],[],[],false,[],[])
+#node(x=0.,y=0.,z=0.,kx=0.,ky=0.,kz=0.,t=0.,species="axion",prob=0.,weight=0.,
+#     parent_weight=0.,xc=[],yc=[],zc=[],kxc=[],kyc=[],kzc=[],tc=[],Pc=[],
+#    is_final=false,traj=[],mom=[]) = node(x,y,z,kx,ky,kz,t,species,prob,weight,
+#     parent_weight,xc,yc,zc,kxc,kyc,kzc,tc,Pc,is_final,traj,mom)
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 # propogate photon module
@@ -222,22 +234,8 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     end
     function cond(u, lnt, integrator)
         r_s0 = 2.0 * Mass_NS * GNew / c_km^2
-        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        # Axions can go inside the NS... Quick fix
-        # TODO: Make sure everything is OK when the
-        # axion is in the NS
-        #arg  = 1 .- r_s0 ./ u[:, 1]
-        #for i in 1:length(arg)
-        #  if arg[i] <= 0
-        #    arg[i] = 1e-10
-        #  end
-        #end
-        #AA = sqrt.(1.0 .- r_s0 ./ u[:, 1])
-        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         AA = sqrt.(1.0 .- r_s0 ./ u[:, 1])
-        
         test = (erg ./ AA .- GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS)) ./ (erg ./ AA) .+ bounce_threshold # trigger when closer to reflection....
-        
         return minimum(test)
         
     end
@@ -254,6 +252,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
       # Store crossings to be used later
       xc = []; yc = []; zc = []
       kxc = []; kyc = []; kzc = []
+      tc = []
 
       # Cut after given amount of crossings
       function condition(u, lnt, integrator)
@@ -286,6 +285,8 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
           push!( yc, ypos )
           push!( zc, zpos )
 
+          push!( tc, exp(i.t) ) # proper time
+
           # Compute proper velocity
           r_s = 2.0 * Mass_NS * GNew / c_km^2
           ω = 1.0 - r_s / i.u[1]
@@ -295,6 +296,8 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
           push!( kxc, cos(i.u[3])*v_tmp   - sin(i.u[3])*v_pl[3] )
           push!( kyc, sin(i.u[3])*v_tmp   + cos(i.u[3])*v_pl[3] )
           push!( kzc, cos(i.u[2])*v_pl[1] - sin(i.u[2])*v_pl[2] )
+
+        
 
           # Check if we want to stop ODE
           i.opts.userdata[:callback_count] +=1
@@ -335,9 +338,6 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
         sol.u[i][:,4:6] .*= erg
     end
    
-
-
-    #!!!!!!!!
     # Axion can be inside NS
     r = [sol.u[i][1] for i in 1:length(sol.u)]
     Mass_NS = Mass_NS*ones(length(r), length(sol.u))
@@ -397,7 +397,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     GC.gc();
     
     if make_tree
-      return x_reshaped,v_reshaped,dt,fail_indx,cut_short,xc,yc,zc,kxc,kyc,kzc
+      return x_reshaped,v_reshaped,dt,fail_indx,cut_short,xc,yc,zc,kxc,kyc,kzc,tc
     else
       return x_reshaped,v_reshaped,dt,fail_indx
     end
@@ -410,8 +410,8 @@ function g_schwartz(x0, Mass_NS; rNS=10.0)
     
     r = x0[:,1]
    
-    # Reduced NS mass is done elsewhere
-    #Mass_NS = Mass_NS_in#*ones(length(r))
+    # Reduced NS mass is done elsewhere...
+    # Mass_NS = Mass_NS_in#*ones(length(r))
     # Mass_NS[r .< rNS] = Mass_NS_in*r[r .< rNS].^3/rNS^3
 
     rs = 2 * GNew .* Mass_NS ./ c_km.^2
@@ -455,13 +455,26 @@ function hamiltonian(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=true, 
 end
 
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-function hamiltonian_axion(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS, mass_axion; iso=true, melrose=false)
-    g_tt, g_rr, g_thth, g_pp = g_schwartz(x, Mass_NS);
-    ksqr = g_tt .* erg.^2 .+ g_rr .* k[:, 1].^2 .+ g_thth .* k[:, 2].^2 .+ g_pp .* k[:, 3].^2
+function hamiltonian_axion(x, k,  time0, erg, θm, ωPul, B0, rNS,
+    Mass_NS, mass_axion; iso=true, melrose=false)
+    g_tt, g_rr, g_thth, g_pp = g_schwartz(x, Mass_NS)
+    ksqr = g_tt .* erg.^2 .+ g_rr .* k[:, 1].^2 .+ g_thth .* k[:, 2].^2 .+
+            g_pp .* k[:, 3].^2
+  
+    #print(erg, " ", mass_axion, "\n")
+    #return 0.5 .* ksqr .+ mass_axion
     
-    # Why factor 1/2 ??
-    Ham = 0.5 .* ksqr .+ mass_axion
+    return 0.5 .* ksqr #.+ mass_axion
+    
+    # erg -> energy at infinity of photon
+    # k -> momentum at infinity of photon
+    # We take the momentum as conserved in the conversion processes, thus
+   
 
+    ksqr .+= g_tt .* mass_axion.^2
+
+    Ham = 0.5 .* ksqr
+   
     return Ham
 end
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

@@ -92,12 +92,9 @@ function parse_commandline()
         "--seed"
             arg_type = Int
             default = -1 # random seed
-        # info level
-        # 0 -> minimum output: init and output particle weights
-        # 5 -> maximum output: complete tree
-        "--infoLevel"
+        "--saveTree"
             arg_type = Int
-            default = 5
+            default = 1
         "--probCutoff"
             arg_type = Float64
             default = 1e-10
@@ -160,7 +157,7 @@ melrose = true; # keep true, more efficient
 ntimes_ax = 10000; # vector scan for resonance
 
 # Tree parameters
-info_level = parsed_args["infoLevel"]
+saveTree = parsed_args["saveTree"]
 num_cutoff = parsed_args["numCutoff"]
 prob_cutoff = parsed_args["probCutoff"]
 seed = parsed_args["seed"]
@@ -201,7 +198,7 @@ if parsed_args["run_RT"] == 1
               flat=flat, isotropic=isotropic, melrose=melrose, ode_err=ode_err,
               cutT=cutT, fix_time=fix_time, CLen_Scale=CLen_Scale,
               file_tag=file_tag, ntimes=ntimes, v_NS=vNS, ntimes_ax=ntimes_ax,
-              info_level=info_level, num_cutoff=num_cutoff, 
+              saveTree=saveTree, num_cutoff=num_cutoff, 
               prob_cutoff=prob_cutoff, iseed=seed)
   else 
     @inbounds @fastmath single_runner(
@@ -211,7 +208,7 @@ if parsed_args["run_RT"] == 1
               flat=flat, isotropic=isotropic, melrose=melrose, ode_err=ode_err,
               cutT=cutT, fix_time=fix_time, CLen_Scale=CLen_Scale,
               file_tag=file_tag, ntimes=ntimes, v_NS=vNS, ntimes_ax=ntimes_ax,
-              info_level=info_level, num_cutoff=num_cutoff, iseed=seed, 
+              saveTree=saveTree, num_cutoff=num_cutoff, iseed=seed, 
               prob_cutoff=prob_cutoff, forwards=parsed_args["forward"])
 
   end
