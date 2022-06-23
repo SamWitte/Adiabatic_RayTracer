@@ -13,9 +13,10 @@ def load_event_info(tag=""):
     x_in     = data[:,5:9]
     k_in     = data[:,9:13]
     x0       = data[:,13:17]
-    k0       = data[:,17:-1]
-    time     = data[:,-1]
-    return num, vIfty, sln_prob, x_in, k_in, x0, k0, time
+    k0       = data[:,17:-2]
+    time     = data[:,-2]
+    nodes    = data[:,-1]
+    return num, vIfty, sln_prob, x_in, k_in, x0, k0, time, nodes
 
 def load_final_info(tag=""):
     data     = np.loadtxt("results/final_"+tag+"_GR_")
@@ -31,11 +32,12 @@ def load_final_info(tag=""):
     t = data[:, 9]
     return num, weight, species, theta_f, phi_f, abs_f, theta_Xf,phi_Xf,abs_Xf,t
 
-for tag in ["low_coupling", "1e-10","1e-11","1e-12","1e-13","1e-14","1e-15"]:
+for tag in ["low_coupling", "1e-10_MC","1e-11_MC","1e-12_MC","1e-13_MC",
+    "1e-14_MC","1e-15_MC"]:
 
 
     try:
-        num0, vIfty, sln_prob, x_in, k_in, x0, k0, time = load_event_info(tag)
+        num0,vIfty,sln_prob,x_in,k_in,x0,k0,time,nodes = load_event_info(tag)
         num, weight, species, theta_f, phi_f, abs_f, theta_Xf,phi_Xf,abs_Xf,t =\
             load_final_info(tag)
     except Exception as e:
@@ -59,8 +61,27 @@ for tag in ["low_coupling", "1e-10","1e-11","1e-12","1e-13","1e-14","1e-15"]:
     plt.ylabel(r"$v_\infty$ [km/s]")
     plt.xlabel("Computation time [s]")
     plt.title(tag)
+    plt.close()
+
+    # Nodes afo time
+    plt.figure()
+    plt.plot(time[1:], nodes[1:], "^")
+    #plt.plot(time[1:], phi[1:], "s")
+    #plt.plot(time[1:], theta[1:], "d")
+    plt.ylabel(r"Number of crossings considered")
+    plt.xlabel("Computation time [s]")
+    plt.title(tag)
     #plt.close()
 
+    # Nodes afo time
+    plt.figure()
+    res = []
+    for i in num0:
+        res.append(np.mean(t[num==i]))
+    plt.plot(res[1:], time[1:], "s")
+    #plt.plot(time[1:], phi[1:], "s")
+    #plt.plot(time[1:], theta[1:], "d")
+    plt.title(tag)
 
     # Differential power
     plt.figure()
@@ -81,5 +102,54 @@ for tag in ["low_coupling", "1e-10","1e-11","1e-12","1e-13","1e-14","1e-15"]:
     plt.yscale("log")
     plt.title(tag)
     plt.legend()
+
+# Convergence plots
+plt.figure()
+for tag in ["1e-10_MC","1e-11_MC","1e-12_MC","1e-13_MC",
+    "1e-14_MC","1e-15_MC"]:
+
+    try:
+        num0,vIfty,sln_prob,x_in,k_in,x0,k0,time,nodes = load_event_info(tag)
+        num, weight, species, theta_f, phi_f, abs_f, theta_Xf,phi_Xf,abs_Xf,t =\
+            load_final_info(tag)
+    except Exception as e:
+        print("Error with ", tag, ". Skipping!")
+        print("The error raised is: ", e)
+        continue
+
+    plt.plot(time[1:], nodes[1:], "o", label=tag)
+
+plt.ylabel(r"Number of crossings considered")
+plt.xlabel("Computation time [s]")
+plt.legend()
+
+
+
+#plt.close("all")
+# Convergence plots
+ls = ["o", "*", "^", "s", "d", "v"]
+c = ["C0", "C1", "C2", "C3", "C4", "C5"]
+
+plt.figure()
+for n, maxNodes in enumerate(["0", "5", "10", "15"]):
+    for p, prob in enumerate(["1e-5", "1e-10", "1e-15", "1e-20"]):
+
+        tag = "1e-10_%s_%s_convergence"%(maxNodes,prob)
+        
+        try:
+            num0,vIfty,sln_prob,x_in,k_in,x0,k0,time,nodes = load_event_info(tag)
+            num, weight, species, theta_f, phi_f, abs_f, theta_Xf,phi_Xf,abs_Xf,t =\
+                load_final_info(tag)
+        except Exception as e:
+            print("Error with ", tag, ". Skipping!")
+            print("The error raised is: ", e)
+            continue
+
+        plt.plot(time[1:], nodes[1:], c[p]+ls[n], fillstyle="none")
+        print(tag, ": ", np.sum(weight)/num0[-1])
+
+plt.ylabel(r"Number of crossings considered")
+plt.xlabel("Computation time [s]")
+plt.legend()
 
 plt.show()

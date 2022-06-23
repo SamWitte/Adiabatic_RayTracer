@@ -262,7 +262,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
       function affect!(i)
 
           if i.opts.userdata[:callback_count] == 0
-            # If i.u has not changes, it is not a new crossings...
+            # If i.u has not changed, it is not a new crossings...
             s = 1.0001
             pos = [sin(i.u[2])*cos(i.u[3]) sin(i.u[2])*sin(i.u[3]) cos(i.u[2])]
             pos .*= i.u[1]

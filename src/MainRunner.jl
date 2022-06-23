@@ -84,7 +84,7 @@ end
 function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,flat,isotropic,melrose,
     NumerPass; num_cutoff=5, prob_cutoff=1e-10,splittings_cutoff=-1,
-    ax_num=100)
+    ax_num=100, max_nodes=5)
 
   # Initial conversion probability
   pos = [first.x first.y first.z]
@@ -103,7 +103,9 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
 
   count = -1
   count_main = 0
-  
+ 
+  truncated = false
+ 
   #DEBUG
   print("Initial conversion probability: ", Prob, "\n")
   print("prob_cutoff: ", prob_cutoff, "\n")
@@ -120,9 +122,10 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     k0 = [event.kx event.ky event.kz]
 
     # DEBUG
-    print("TIME: ", event.t, "\n")
-    print(count_main, " ", event.species, " ", event.weight, " ",
-          tot_prob, " ", sum(pos0.^2), "\n")
+    U = 1.476624654*Mass_a*Mass_NS/sqrt(pos0[1]^2 + pos0[2]^2 + pos0[3]^2) # eV
+    print("NEXT PARTICLE ", event.species, " ", pos0, " ", k0, " ",
+          erg_inf_ini, " ", U, " ", sqrt(k0[1]^2 + k0[2]^2 + k0[3]^2), "\n")
+    print( sqrt(k0[1]^2 + k0[2]^2 + k0[3]^2 + Mass_a^2) - Mass_a - U, "\n")
 
     # propagate photon or axion
     if event.species == "photon"
@@ -215,30 +218,49 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
         new_species = "photon"
       end
 
-      # Add all crossings to the tree
-      print("Number of crossings: ", Nc, "\n") #DEBUG
-      for j in 1:Nc 
-        push!(events, RT.node(xc[j], yc[j], zc[j], kxc[j], kyc[j], kzc[j],
-              tc[j], new_species, Prob[j], Prob[j]*event.weight, event.weight))
-          if splittings_cutoff <= 0 
-            push!(events, RT.node(xc[j], yc[j], zc[j], kxc[j], kyc[j], kzc[j],
-                          tc[j], event.species, 1-Prob[j],
-                          (1-Prob[j])*event.weight, event.weight))
-          else
-            event.weight = event.weight*(1-Prob[j]) # Re-weight of parent
-          end
-      end
-      
-      if splittings_cutoff > 0 # Only final particles should count
-        tot_prob += event.weight
-      end
 
+      if splittings_cutoff <= 0 # stop at each crossing
+
+        # This event is taking too long! We transition to a pure MC
+        if count > max_nodes
+          r = rand(Float64)
+          print("MC: ", r, " ", Prob[1], "\n")
+          if r < Prob[1]
+            push!(events, RT.node(xc[1], yc[1], zc[1], kxc[1], kyc[1], kzc[1],
+              tc[1], new_species, Prob[1], event.weight, event.weight))
+          else
+            push!(events, RT.node(xc[1], yc[1], zc[1], kxc[1], kyc[1], kzc[1],
+              tc[1], event.species, 1-Prob[1], event.weight, event.weight))
+          end
+
+        else
+
+          # Store full tree
+          push!(events, RT.node(xc[1], yc[1], zc[1], kxc[1], kyc[1], kzc[1],
+              tc[1], new_species, Prob[1], Prob[1]*event.weight, event.weight))
+          push!(events, RT.node(xc[1], yc[1], zc[1], kxc[1], kyc[1], kzc[1],
+              tc[1], event.species, 1-Prob[1],
+                          (1-Prob[1])*event.weight, event.weight))
+
+        end
+
+      else # Follow one particle for more than one crossing
+        
+        for j in 1:Nc 
+            push!(events, RT.node(xc[j], yc[j], zc[j], kxc[j], kyc[j], kzc[j],
+                tc[j], new_species, Prob[j], Prob[j]*event.weight, event.weight))
+            event.weight = event.weight*(1-Prob[j]) # Re-weight of parent
+        end
+        tot_prob += event.weight
+
+      end
+  
     end
 
     # Add to tree
+    print("Pushed event\n") # DEBUG
     push!(tree, event)
 
-    # Cutoff
     if tot_prob >= 1 - prob_cutoff
       break
     end
@@ -249,22 +271,29 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
       break
     end
 
+    if count > 50
+      break
+    end
+
     # Sort events to consider the most likely first
     sort!(events, by = events->events.weight)
 
   end
 
-  return tree
+  return tree, count 
 
 end
 
 
 function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     Ntajs, gammaF, batchsize; flat=true, isotropic=false, melrose=false,
-    ode_err=1e-5, cutT=100000, fix_time=Nothing, CLen_Scale=true, file_tag="",
+    ode_err=1e-10, cutT=100000, fix_time=Nothing, CLen_Scale=true, file_tag="",
     ntimes=1000, v_NS=[0 0 0], rho_DM=0.3, save_more=false, vmean_ax=220.0,
-    ntimes_ax=10000, dir_tag="results", n_maxSample=8, iseed=-1, num_cutoff=5,
-    prob_cutoff=1e-10, saveTree=0)
+    ntimes_ax=1000, dir_tag="results", n_maxSample=8, iseed=-1,
+    num_cutoff=5,
+    max_nodes=5,
+    prob_cutoff=1e-10, 
+    saveTree=0)
 
     if iseed < 0
       iseed = rand(0:1000000)
@@ -277,6 +306,9 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
       Random.seed!(iseed)
     end
 
+    if saveTree == 0
+      ntimes = 3
+    end
 
     # Identify the maximum distance of the conversion surface from NS
     maxR = RT.Find_Conversion_Surface(Mass_a, fix_time, θm, ωPul, B0,
@@ -456,10 +488,11 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                 -k_init[i, 1], -k_init[i, 2], -k_init[i, 3], 0.,
                 "axion", 1.0, 1.0, -1.0)
           # The simplest is always the best: make use of existing code
-          nb = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
+          nb, _ = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
                 flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
-                num_cutoff=0, splittings_cutoff=100000, ax_num=100)[1]
+                num_cutoff=0, splittings_cutoff=100000, ax_num=ntimes)
+          nb = nb[1]
           if saveTree>0 saveNode(f, nb) end
 
           print(photon_trajs, " forward in time\n--------------------\n") #DEBUG
@@ -501,15 +534,17 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           # Forward propagation of a photon from the last node
           species = ["axion*" "photon"]
           probs = [1 - nb.Pc[end], nb.Pc[end]]
+          count = 0
           for j in [1 2]
-            if probs[j] > prob_cutoff # Skip if unlikely
+            ######if probs[j] > prob_cutoff # Skip if unlikely
               parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
                       -nb.kxc[end], -nb.kyc[end], -nb.kzc[end], nb.tc[end],
                       species[j], probs[j], probs[j], 1.0)
-              tree = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
+              tree, c = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                   Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
                   flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
-                  num_cutoff=num_cutoff,ax_num=100)
+                  num_cutoff=num_cutoff,ax_num=ntimes,max_nodes=max_nodes)
+              count += c
 
               # Store results
               for ii in 1:length(tree)
@@ -540,14 +575,14 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                 end
               end
 
-            end
+            ######end
           end
 
           photon_trajs += 1
       
           if saveTree>0 close(f) end
 
-          write(f_event, " ", string(time() - time0), "\n")
+          write(f_event, " ", string(time() - time0), " ", string(count), "\n")
 
           close(f_final)
           close(f_event)
