@@ -1,3 +1,5 @@
+__precompile__()
+
 RT = RayTracerGR; # define ray tracer module
 func_use = RT.ωNR_e
 func_use_SPHERE = RT.ωSimple_SPHERE
@@ -86,6 +88,8 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     NumerPass; num_cutoff=5, prob_cutoff=1e-10,splittings_cutoff=-1,
     ax_num=100, max_nodes=5)
 
+
+
   # Initial conversion probability
   pos = [first.x first.y first.z]
   kpos = [first.kx first.ky first.kz]
@@ -100,6 +104,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   tree = []
 
   tot_prob = 0 # Total probability in tree
+  tot_prob = 1 - first.prob
 
   count = -1
   count_main = 0
@@ -107,9 +112,11 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   truncated = false
  
   #DEBUG
-  print("Initial conversion probability: ", Prob, "\n")
-  print("prob_cutoff: ", prob_cutoff, "\n")
-  print("num_cutoff: ", num_cutoff, "\n")
+  #print("Initial conversion probability: ", Prob, "\n")
+  #print("prob_cutoff: ", prob_cutoff, "\n")
+  #print("max_nodes: ", max_nodes, "\n")
+  #print("num_cutoff: ", num_cutoff, "\n")
+  #print("ax_num: ", ax_num, "\n")
 
   while length(events) > 0
     
@@ -121,11 +128,63 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     pos0 = [event.x event.y event.z]
     k0 = [event.kx event.ky event.kz]
 
-    # DEBUG
-    U = 1.476624654*Mass_a*Mass_NS/sqrt(pos0[1]^2 + pos0[2]^2 + pos0[3]^2) # eV
-    print("NEXT PARTICLE ", event.species, " ", pos0, " ", k0, " ",
-          erg_inf_ini, " ", U, " ", sqrt(k0[1]^2 + k0[2]^2 + k0[3]^2), "\n")
-    print( sqrt(k0[1]^2 + k0[2]^2 + k0[3]^2 + Mass_a^2) - Mass_a - U, "\n")
+    ######3## DEBUG
+    # Compute hamiltonian
+    x0 = pos0
+    erg = erg_inf_ini
+    r_s0 = 2.0 * Mass_NS * GNew / c_km^2
+    rr = sqrt.(sum(x0.^2))
+    # r theta phi
+    x0_pl = [rr acos.(x0[3] ./ rr) atan.(x0[2], x0[1])]
+    
+    # vr, vtheta, vphi --- Define lower momenta and upper indx pos
+    # [unitless, unitless, unitless ]
+    dr_dt = sum(x0 .* k0) ./ rr
+    v0_pl = [dr_dt (x0[3] .* dr_dt .- rr .* k0[3]) ./ (rr .* sin.(x0_pl[2])) (-x0[2] .* k0[1] .+ x0[1] .* k0[2]) ./ (rr .* sin.(x0_pl[2])) ];
+    
+    # Switch to celerity in polar coordinates
+    AA = (1.0 .- r_s0 ./ rr)
+    
+    w0_pl = [v0_pl[1] ./ sqrt.(AA)   v0_pl[2] ./ rr .* rr.^2  v0_pl[3] ./ (rr .* sin.(x0_pl[2])) .* (rr .* sin.(x0_pl[2])).^2 ] ./ AA 
+
+    #w0_pl ./= erg
+    
+    g_tt, g_rr, g_thth, g_pp = RT.g_schwartz(x0_pl, Mass_NS)
+    ksqr = g_tt .* erg.^2 .+ g_rr .* w0_pl[1].^2 .+ g_thth .* w0_pl[2].^2 .+
+            g_pp .* w0_pl[3].^2
+    #print("species: ", event.species, "\n")
+    #print("HAMILTONIAN (for axion): ", .5*ksqr, "\n")
+    print("Bound if negative: ", 1 + ksqr[1]/Mass_a^2, "\n")
+
+    k_abs = sqrt(k0[1]^2   + k0[2]^2   + k0[3]^2) 
+    r_abs = sqrt(pos0[1]^2 + pos0[2]^2 + pos0[3]^2)
+    
+    k_r = (k0[1]*pos0[1] + k0[2]*pos0[2] + k0[3]*pos0[3])/r_abs^2 .* pos0
+    k_perp = k0 .- k_r
+
+    V_eff = (
+           -c_km^-2*Mass_NS*GNew/sqrt(pos0[1]^2 + pos0[2]^2 + pos0[3]^2)
+           -c_km^-2*Mass_NS*GNew/sqrt(pos0[1]^2 + pos0[2]^2 + pos0[3]^2)
+           *sum(k_perp.^2)
+            )*Mass_a
+    
+    V_a = 0.5*k_abs^2/Mass_a
+    #print(V_eff + V_a, "\n")
+    #print(erg_inf_ini - Mass_a, "\n")
+
+
+
+    #V_eff = (
+    #       -c_km^-2*Mass_NS*GNew/sqrt(pos0[1]^2 + pos0[2]^2 + pos0[3]^2)
+    #       -c_km^-2*Mass_NS*GNew/sqrt(pos0[1]^2 + pos0[2]^2 + pos0[3]^2)
+    #       *sum(k_perp.^2)/2/Mass_a^2
+    #        )*Mass_a
+    #V_a = 0.5*Mass_a*k_abs^2/Mass_a^2
+    #print("--- V_eff: ", V_eff, "\n")
+    #print("--- V_axion:  ", V_a, "\n")
+    #print("V_a + V_eff: ", V_a + V_eff, "\n")
+
+    ############
 
     # propagate photon or axion
     if event.species == "photon"
@@ -197,6 +256,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
       pos[:, 1] .= xc; pos[:, 2] = yc; pos[:, 3] = zc
       kpos = zeros(Nc, 3);
       kpos[:, 1] .= kxc; kpos[:, 2] .= kyc; kpos[:, 3] .= kzc
+      #resontant conversion: "plasma mass"=axion mass
       event.xc = xc
       event.yc = yc
       event.zc = zc
@@ -224,7 +284,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
         # This event is taking too long! We transition to a pure MC
         if count > max_nodes
           r = rand(Float64)
-          print("MC: ", r, " ", Prob[1], "\n")
+          #print("MC: ", r, " ", Prob[1], "\n")
           if r < Prob[1]
             push!(events, RT.node(xc[1], yc[1], zc[1], kxc[1], kyc[1], kzc[1],
               tc[1], new_species, Prob[1], event.weight, event.weight))
@@ -258,7 +318,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     end
 
     # Add to tree
-    print("Pushed event\n") # DEBUG
+    #print("Pushed event\n") # DEBUG
     push!(tree, event)
 
     if tot_prob >= 1 - prob_cutoff
@@ -287,7 +347,7 @@ end
 
 function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     Ntajs, gammaF, batchsize; flat=true, isotropic=false, melrose=false,
-    ode_err=1e-10, cutT=100000, fix_time=Nothing, CLen_Scale=true, file_tag="",
+    ode_err=1e-6, cutT=100000, fix_time=Nothing, CLen_Scale=true, file_tag="",
     ntimes=1000, v_NS=[0 0 0], rho_DM=0.3, save_more=false, vmean_ax=220.0,
     ntimes_ax=1000, dir_tag="results", n_maxSample=8, iseed=-1,
     num_cutoff=5,
@@ -297,14 +357,17 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
 
     if iseed < 0
       iseed = rand(0:1000000)
-      print("Using seed ", iseed, "\n")
+      #print("Using seed ", iseed, "\n") # DEBUG
       Random.seed!(iseed)
     elseif iseed == 0
       Random.seed!()
     else
-      print("Using seed ", iseed, "\n")
+      #print("Using seed ", iseed, "\n") # DEBUG
       Random.seed!(iseed)
     end
+
+
+    batchsize=1
 
     if saveTree == 0
       ntimes = 3
@@ -369,6 +432,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     f_event = open(fname, "w")
     close(f_event)
 
+    tot_count = 0
     while photon_trajs < desired_trajs
         
         # First part of code here is just written to generate evenly spaced
@@ -475,13 +539,13 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           f_event = open(fname, "a")
 
           time0=time()
-          print("timenow: ", time0, "\n") # DEBUG
+          #print("timenow: ", time0, "\n") # DEBUG
 
           # Entire tree; one file each
           fname = dir_tag * "/tree_" * file_tag * string(photon_trajs) 
           if saveTree>0 f = open(fname, "w") end
 
-          print(photon_trajs, " backward in time\n------------------\n") # DEBUG
+          #print(photon_trajs, " backward in time\n-----------------\n") # DEBUG
           # Find previous crossings...
           # Backwards in time equivalent to setting k->-k and vecB->-vecB
           parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
@@ -495,7 +559,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           nb = nb[1]
           if saveTree>0 saveNode(f, nb) end
 
-          print(photon_trajs, " forward in time\n--------------------\n") #DEBUG
+          #print(photon_trajs, " forward in time\n-------------------\n") #DEBUG
 
           # Store event information
           write(f_event,
@@ -529,14 +593,14 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
 
           nb.tc .-= nb.tc[end] # We define t=0 at the first conversion
           nb.tc .*= -1
-          print("Times:", nb.tc, "\n") # DEBUG 
+          #print("Times:", nb.tc, "\n") # DEBUG 
 
           # Forward propagation of a photon from the last node
           species = ["axion*" "photon"]
           probs = [1 - nb.Pc[end], nb.Pc[end]]
-          count = 0
+          count = 0 
           for j in [1 2]
-            ######if probs[j] > prob_cutoff # Skip if unlikely
+            #if probs[j] > prob_cutoff # Skip if unlikely
               parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
                       -nb.kxc[end], -nb.kyc[end], -nb.kzc[end], nb.tc[end],
                       species[j], probs[j], probs[j], 1.0)
@@ -545,6 +609,8 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                   flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
                   num_cutoff=num_cutoff,ax_num=ntimes,max_nodes=max_nodes)
               count += c
+              
+              tot_count += length(tree)
 
               # Store results
               for ii in 1:length(tree)
@@ -574,27 +640,29 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                        )
                 end
               end
-
-            ######end
+            #end
           end
 
           photon_trajs += 1
       
           if saveTree>0 close(f) end
 
+
           write(f_event, " ", string(time() - time0), " ", string(count), "\n")
 
           close(f_final)
           close(f_event)
 
-        end
-        
+
+        end # Batchsize, in any case 0...
 
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     end # while
 
 #    close(f_final)
 #    close(f_event)
+
+    return tot_count
 
 end
 

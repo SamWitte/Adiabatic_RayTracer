@@ -101,6 +101,9 @@ function parse_commandline()
         "--numCutoff"
             arg_type = Int
             default = 5
+        "--maxNodes"
+            arg_type = Int
+            default = 5
         # ---- parameters for single run ----
         "--species"
             arg_type = String
@@ -149,7 +152,7 @@ cutT = 10000; # keep highest weight 'cutT' each batch
 fix_time = 0.0; # eval at fixed time = 0?
 file_tag = parsed_args["ftag"] * "_GR_";  # if you dont want to cut on Lc "_NoCutLc_";
 ode_err = 1e-6; # need strong error
-ntimes = 300 # how many points on photon traj to keep
+ntimes = 100 # how many points on photon traj to keep
 vNS = [parsed_args["vNS_x"] parsed_args["vNS_y"] parsed_args["vNS_z"]]; # relative neutron star velocity
 flat = false; # flat space or schwartzchild
 isotropic = false; # default is anisotropic
@@ -160,6 +163,7 @@ ntimes_ax = 10000; # vector scan for resonance
 saveTree = parsed_args["saveTree"]
 num_cutoff = parsed_args["numCutoff"]
 prob_cutoff = parsed_args["probCutoff"]
+max_nodes = parsed_args["maxNodes"]
 seed = parsed_args["seed"]
 # Single run parameters
 species = parsed_args["species"]
@@ -199,7 +203,7 @@ if parsed_args["run_RT"] == 1
               cutT=cutT, fix_time=fix_time, CLen_Scale=CLen_Scale,
               file_tag=file_tag, ntimes=ntimes, v_NS=vNS, ntimes_ax=ntimes_ax,
               saveTree=saveTree, num_cutoff=num_cutoff, 
-              prob_cutoff=prob_cutoff, iseed=seed)
+              prob_cutoff=prob_cutoff, iseed=seed, max_nodes=max_nodes)
   else 
     @inbounds @fastmath single_runner(
               species, x0, y0, z0, kx0, ky0, kz0,

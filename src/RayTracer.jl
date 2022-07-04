@@ -351,6 +351,8 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
 
 
 
+
+
     # Switch back to proper velocity
     v_pl = [[sol.u[i][:,4] .* sqrt.(ω[i])  sol.u[i][:,5] ./ sol.u[i][:,1] sol.u[i][:,6] ./ (sol.u[i][:,1] .* sin.(sol.u[i][:,2])) ] .* ω[i] for i in 1:length(sol.u)]
     
@@ -418,8 +420,6 @@ function g_schwartz(x0, Mass_NS; rNS=10.0)
 
     # turn off GR inside NS
     # rs[r .<= rNS] .= 0.0
-    #!!!!!!!
-
 
     sin_theta = sin.(x0[:,2])
     g_tt = -1.0 ./ (1.0 .- rs ./ r);
@@ -460,22 +460,9 @@ function hamiltonian_axion(x, k,  time0, erg, θm, ωPul, B0, rNS,
     g_tt, g_rr, g_thth, g_pp = g_schwartz(x, Mass_NS)
     ksqr = g_tt .* erg.^2 .+ g_rr .* k[:, 1].^2 .+ g_thth .* k[:, 2].^2 .+
             g_pp .* k[:, 3].^2
-  
-    #print(erg, " ", mass_axion, "\n")
-    #return 0.5 .* ksqr .+ mass_axion
+    #print(ksqr, "\n") 
+    return 0.5 .* ksqr
     
-    return 0.5 .* ksqr #.+ mass_axion
-    
-    # erg -> energy at infinity of photon
-    # k -> momentum at infinity of photon
-    # We take the momentum as conserved in the conversion processes, thus
-   
-
-    ksqr .+= g_tt .* mass_axion.^2
-
-    Ham = 0.5 .* ksqr
-   
-    return Ham
 end
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
