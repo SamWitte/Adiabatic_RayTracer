@@ -104,7 +104,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   tree = []
 
   tot_prob = 0 # Total probability in tree
-  tot_prob = 1 - first.prob
+  # Note: turned of to make bound orbits more likelytot_prob = 1 - first.prob
 
   count = -1
   count_main = 0
@@ -112,6 +112,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   truncated = false
  
   #DEBUG
+  print("NEW PARTICLE!\n")
   #print("Initial conversion probability: ", Prob, "\n")
   #print("prob_cutoff: ", prob_cutoff, "\n")
   #print("max_nodes: ", max_nodes, "\n")
@@ -152,7 +153,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     g_tt, g_rr, g_thth, g_pp = RT.g_schwartz(x0_pl, Mass_NS)
     ksqr = g_tt .* erg.^2 .+ g_rr .* w0_pl[1].^2 .+ g_thth .* w0_pl[2].^2 .+
             g_pp .* w0_pl[3].^2
-    #print("species: ", event.species, "\n")
+    print("species: ", event.species, "\n")
     #print("HAMILTONIAN (for axion): ", .5*ksqr, "\n")
     print("Bound if negative: ", 1 + ksqr[1]/Mass_a^2, "\n")
 
