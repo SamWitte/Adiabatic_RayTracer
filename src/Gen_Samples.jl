@@ -155,9 +155,9 @@ ode_err = 1e-6; # need strong error
 ntimes = 100 # how many points on photon traj to keep
 vNS = [parsed_args["vNS_x"] parsed_args["vNS_y"] parsed_args["vNS_z"]]; # relative neutron star velocity
 flat = false; # flat space or schwartzchild
-isotropic = false; # default is anisotropic
+isotropic = true; # default is anisotropic
 melrose = true; # keep true, more efficient
-ntimes_ax = 10000; # vector scan for resonance
+ntimes_ax = 500; # vector scan for resonance
 
 # Tree parameters
 saveTree = parsed_args["saveTree"]

@@ -137,6 +137,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     rr = sqrt.(sum(x0.^2))
     # r theta phi
     x0_pl = [rr acos.(x0[3] ./ rr) atan.(x0[2], x0[1])]
+    omP = RT.GJ_Model_ωp_vecSPH(x0_pl, zeros(length(x0_pl[:,1])), θm, ωPul, B0, rNS, zeroIn=true);
     
     # vr, vtheta, vphi --- Define lower momenta and upper indx pos
     # [unitless, unitless, unitless ]
@@ -146,16 +147,21 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     # Switch to celerity in polar coordinates
     AA = (1.0 .- r_s0 ./ rr)
     
-    w0_pl = [v0_pl[1] ./ sqrt.(AA)   v0_pl[2] ./ rr .* rr.^2  v0_pl[3] ./ (rr .* sin.(x0_pl[2])) .* (rr .* sin.(x0_pl[2])).^2 ] ./ AA 
+    w0_pl = [v0_pl[1] ./ sqrt.(AA)   v0_pl[2] ./ rr .* rr.^2  v0_pl[3] ./ (rr .* sin.(x0_pl[2])) .* (rr .* sin.(x0_pl[2])).^2 ]
+    g_tt, g_rr, g_thth, g_pp = RT.g_schwartz(x0_pl, Mass_NS);
+    kpar = RT.K_par(x0_pl, w0_pl, [θm, ωPul, B0, rNS, zeros(length(x0_pl[:,1])), Mass_NS])
+    if isotropic
+        kpar .*= 0.0
+    end
+    NrmSq = (-erg.^2 .* g_tt .- omP.^2) ./ (w0_pl[:, 1].^2 .* g_rr .+  w0_pl[:, 2].^2 .* g_thth .+ w0_pl[:, 3].^2 .* g_pp .- omP.^2 .* kpar.^2 ./ (erg.^2 ./ g_rr))
+    w0_pl .*= sqrt.(NrmSq) # set particle on shell
 
-    #w0_pl ./= erg
     
-    g_tt, g_rr, g_thth, g_pp = RT.g_schwartz(x0_pl, Mass_NS)
     ksqr = g_tt .* erg.^2 .+ g_rr .* w0_pl[1].^2 .+ g_thth .* w0_pl[2].^2 .+
             g_pp .* w0_pl[3].^2
     print("species: ", event.species, "\n")
-    #print("HAMILTONIAN (for axion): ", .5*ksqr, "\n")
-    print("Bound if negative: ", 1 + ksqr[1]/Mass_a^2, "\n")
+    # print("HAMILTONIAN (for axion): ", .5*ksqr, "\n")
+    # print("Bound if negative: ", 1 + ksqr[1]/Mass_a^2, "\n")
 
     k_abs = sqrt(k0[1]^2   + k0[2]^2   + k0[3]^2) 
     r_abs = sqrt(pos0[1]^2 + pos0[2]^2 + pos0[3]^2)
@@ -347,7 +353,7 @@ end
 
 
 function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
-    Ntajs, gammaF, batchsize; flat=true, isotropic=false, melrose=false,
+    Ntajs, gammaF, batchsize; flat=true, isotropic=false, melrose=false, thick_surface=true,
     ode_err=1e-6, cutT=100000, fix_time=Nothing, CLen_Scale=true, file_tag="",
     ntimes=1000, v_NS=[0 0 0], rho_DM=0.3, save_more=false, vmean_ax=220.0,
     ntimes_ax=1000, dir_tag="results", n_maxSample=8, iseed=-1,
@@ -417,6 +423,8 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     # init some arrays
     t0_ax = zeros(batchsize);
     xpos_flat = zeros(batchsize, 3);
+    velNorm_flat = zeros(batchsize, 3);
+    vIfty = zeros(batchsize, 3);
     R_sample = zeros(batchsize);
     mcmc_weights = zeros(batchsize);
     filled_positions = false;
@@ -439,21 +447,25 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         # First part of code here is just written to generate evenly spaced
         # samples of conversion surface
         while !filled_positions
-            xv, Rv, numV, weights = RT.find_samples(maxR, ntimes_ax, θm, ωPul,
-                                                    B0, rNS, Mass_a, Mass_NS)
-            f_inx += 2;
+            xv, Rv, numV, vvec_in, vIfty_in = RT.get_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_max=n_maxSample, batchsize=2, thick_surface=thick_surface, iso=isotropic, melrose=melrose)
+            f_inx += 2
             
             if numV == 0
                 continue
             end
-            
-            for i in 1:numV # Keep more?
+          
+
+            for i in 1:Int(numV) # Keep more?
                 f_inx -= 1
                 if fill_indx <= batchsize
+            
                     xpos_flat[fill_indx, :] .= xv[i, :];
                     R_sample[fill_indx] = Rv[i];
                     mcmc_weights[fill_indx] = n_maxSample;
-                    fill_indx += 1 
+                    velNorm_flat[fill_indx, :] .= vvec_in[i, :];
+                    vIfty[fill_indx, :] .= vIfty_in[i, :];
+                    fill_indx += 1
+                    
                 end
             end
             
@@ -464,54 +476,34 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         end
         filled_positions = false;
 
-        vIfty = erfinv.(2 .* rand(batchsize, 3) .- 1.0) .* vmean_ax .+ v_NS#km/s
+        # vIfty = erfinv.(2 .* rand(batchsize, 3) .- 1.0) .* vmean_ax .+ v_NS#km/s
         rmag = sqrt.(sum(xpos_flat.^ 2, dims=2));
         vmag = sqrt.(2 * GNew .* Mass_NS ./ rmag) ; # km/s
 
-        newV = zeros(length(rmag), 3)
+        
         jacVs = zeros(length(rmag))
         
         ϕ = atan.(view(xpos_flat, :, 2), view(xpos_flat, :, 1))
         θ = acos.(view(xpos_flat, :, 3)./ rmag)
         for i in 1:length(rmag)
-            found = false
-            cnt_careful= 0
-            while !found
-                vGu = rand()
-                velV, accur = RT.solve_vel_CS(θ[i], ϕ[i], rmag[i], vIfty[i,:] ./
-                                      2.998e5, guess=[vGu vGu vGu], errV=1e-20)
-                test_func = (sum(velV.^2) .- (2 .* GNew .* Mass_NS ./ rmag[i] ./
-                                              (c_km .^ 2))); # unitless
-                if (accur .< accur_threshold)&&(test_func .> 0)
-                    newV[i, :] .= velV[1, :]
-                    jacVs[i] = RT.jacobian_fv(xpos_flat[i, :], velV)
-                    found = true
-                end
-                cnt_careful += 1
-                if cnt_careful > 50
-                    print("Personal ERROR:failing here, check what is",
-                          "happening.... \n\n")
-                    break;
-                end
-            end
-
+            jacVs[i] = RT.jacobian_fv(xpos_flat[i, :], velNorm_flat[i, :])
         end
-        newV ./= sqrt.(sum(newV .^ 2, dims=2));
+        
         
         # define angle between surface normal and velocity
-        calpha = RT.surfNorm(xpos_flat, newV, [func_use, [θm, ωPul, B0, rNS,
+        calpha = RT.surfNorm(xpos_flat, velNorm_flat, [func_use, [θm, ωPul, B0, rNS,
                   gammaF, zeros(batchsize), Mass_NS]], return_cos=true); # alpha
         weight_angle = abs.(calpha);
 
         # sample asymptotic velocity
         vIfty_mag = sqrt.(sum(vIfty.^2, dims=2));
-        vel_eng = sum((vIfty ./ 2.998e5).^ 2, dims = 2) ./ 2;
+        vel_eng = sum((vIfty ./ c_km).^ 2, dims = 2) ./ 2;
         gammaA = 1 ./ sqrt.(1.0 .- (vIfty_mag ./ c_km).^2 )
         erg_inf_ini = Mass_a .* sqrt.(1 .+ (vIfty_mag ./ c_km .* gammaA).^2)
         
         # define initial momentum (magnitude)
-        k_init = RT.k_norm_Cart(xpos_flat, newV,  0.0, erg_inf_ini, θm, ωPul,
-              B0, rNS, Mass_NS, melrose=melrose, isotropic=isotropic, flat=flat)
+        k_init = RT.k_norm_Cart(xpos_flat, velNorm_flat,  0.0, erg_inf_ini, θm, ωPul, B0, rNS, Mass_NS, Mass_a, melrose=melrose, isotropic=isotropic, flat=flat)
+        
         MagnetoVars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                        erg_inf_ini, flat, isotropic, melrose]
                    # θm, ωPul, B0, rNS, gamma factors, Time = 0, mass_ns, erg ax
@@ -519,7 +511,12 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         # Needed for differential power
         # Note: optical depth and weightC are neglected here
         phaseS =  (2 .* π .* maxR.^2) .* rho_DM  ./ Mass_a
-        phaseS = jacVs.*phaseS
+        
+        theta_sf = acos.(xpos_flat[:,3] ./ rmag)
+        x0_pl = [rmag theta_sf atan.(xpos_flat[:,2], xpos_flat[:,1])]
+        jacobian_GR = RT.g_det(x0_pl, zeros(batchsize), θm, ωPul, B0, rNS, Mass_NS; flat=flat); # unitless
+        
+        phaseS = jacVs.*phaseS.*jacobian_GR
         sln_prob = weight_angle .* phaseS .* (1e5 .^ 2) .* c_km .* 1e5 .*
                    mcmc_weights # axions in per second
 
