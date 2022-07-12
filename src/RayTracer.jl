@@ -1120,7 +1120,7 @@ function ωGam(x, k, t, θm, ωPul, B0, rNS, gammaF)
     return ω_final
 end
 
-function get_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_max=6, batchsize=2, thick_surface=false, iso=false, melrose=false)
+function get_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; vmean_ax=220.0, v_NS=[0.0, 0.0, 0.0], n_max=6, batchsize=2, thick_surface=false, iso=false, melrose=false)
     # randomly sample angles θ, ϕ
     θi = acos.(1.0 .- 2.0 .* rand(batchsize));
     ϕi = rand(batchsize) .* 2π;
@@ -1135,7 +1135,8 @@ function get_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_ma
     # rotate using Inv[EurlerMatrix(ϕi, θi, 0)] on vector (x1, x2, 0)
     x0_all= [x1 .* cos.(-ϕi) .* cos.(-θi) .+ x2 .* sin.(-ϕi) x2 .* cos.(-ϕi) .- x1 .* sin.(-ϕi) .* cos.(-θi) x1 .* sin.(-θi)];
     
-    vIfty = 200.0 .+ rand(batchsize, 3) .* 1.0e-1;
+    # vIfty = float(rand(-1:2:1, batchsize, 3)) .* 200.0 .+ rand(batchsize, 3) .* 1.0e-1;
+    vIfty = erfinv.(2 .* rand(batchsize, 3) .- 1.0) .* vmean_ax .+ v_NS # km/s
     vIfty_mag = sqrt.(sum(vIfty.^2, dims=2));
     gammaA = 1 ./ sqrt.(1.0 .- (vIfty_mag ./ c_km).^2 )
     erg_inf_ini = Mass_a .* sqrt.(1 .+ (vIfty_mag ./ c_km .* gammaA).^2)
@@ -1160,6 +1161,7 @@ function get_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_ma
         if !thick_surface
             cxing_st = get_crossings(log.(GJ_Model_ωp_vec(x_pts, 0.0, θm, ωPul, B0, rNS)) .- log.(Mass_a))
         else
+            # cxing_st = get_crossings(test_on_shell(x_pts, transpose(vvec_all[i, :]), 0.0, erg_inf_ini[i], θm, ωPul, B0, rNS, Mass_NS, Mass_a; iso=iso, melrose=melrose))
             cxing_st = get_crossings(test_on_shell(x_pts, vIfty, 0.0, erg_inf_ini[i], θm, ωPul, B0, rNS, Mass_NS, Mass_a; iso=iso, melrose=melrose))
         end
         cxing = apply(cxing_st, tt_ax)
@@ -1220,6 +1222,7 @@ function get_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_ma
     vIfty = vIfty[weights .== 1.0, :]
     rRND = rRND[weights .== 1.0]
     ntrajs = sum(weights)
+    vvec_all = vvec_all[weights .== 1.0, :]
     
     rr = sqrt.(sum(xpos_flat.^2, dims=2))
     x0_pl = [rr acos.(xpos_flat[:,3] ./ rr) atan.(xpos_flat[:,2], xpos_flat[:,1])]
@@ -1227,16 +1230,17 @@ function get_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_ma
     
     vel_near = zeros(Int(ntrajs), 3)
     for i in 1:Int(ntrajs)
-        vGu = rand()
-        k0, accur = solve_vel_CS(x0_pl[i, 2], x0_pl[i, 3], x0_pl[i, 1], vIfty ./ c_km, guess=[vGu vGu vGu], errV=1e-6)
+        randARR = float(rand(-1:2:1, 3))
+        vGuess = [rand() .* randARR[1] rand() .* randARR[2] rand() .* randARR[3]]
+        vGuess ./= sqrt.(sum(vGuess.^2))
+        k0, accur = solve_vel_CS(x0_pl[i, 2], x0_pl[i, 3], x0_pl[i, 1], vIfty ./ c_km, guess=vGuess, errV=1e-24)
         vel_near[i, :] .= [k0[1]; k0[2]; k0[3]]
+        
     end
 
-    
     return xpos_flat, rRND, ntrajs, vel_near, vIfty
     
 end
-
 
 
 

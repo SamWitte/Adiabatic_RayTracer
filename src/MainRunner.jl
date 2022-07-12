@@ -447,7 +447,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         # First part of code here is just written to generate evenly spaced
         # samples of conversion surface
         while !filled_positions
-            xv, Rv, numV, vvec_in, vIfty_in = RT.get_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_max=n_maxSample, batchsize=2, thick_surface=thick_surface, iso=isotropic, melrose=melrose)
+            xv, Rv, numV, vvec_in, vIfty_in = RT.get_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; vmean_ax=vmean_ax, v_NS=v_NS, n_max=n_maxSample, batchsize=2, thick_surface=thick_surface, iso=isotropic, melrose=melrose)
             f_inx += 2
             
             if numV == 0
