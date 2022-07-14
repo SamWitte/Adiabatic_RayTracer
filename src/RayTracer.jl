@@ -11,6 +11,7 @@ using ForwardDiff: gradient, derivative, Dual, Partials, hessian
 using OrdinaryDiffEq
 using LSODA
 using DiffEqBase
+using SpecialFunctions
 # using DifferentialEquations
 # using CuArrays
 using LinearAlgebra: cross, det
@@ -473,7 +474,7 @@ function test_on_shell(x, v_inf, time0, erg_inf, θm, ωPul, B0, rNS, Mass_NS, M
     x0_pl = [rr acos.(x[:,3] ./ rr) atan.(x[:,2], x[:,1])]
     
     vGu = rand()
-    k0, accur = solve_vel_CS(x0_pl[2], x0_pl[3], x0_pl[1], v_inf ./ c_km, guess=[vGu vGu vGu], errV=1e-6)
+    k0, accur = solve_vel_CS(x0_pl[2], x0_pl[3], x0_pl[1], v_inf ./ c_km, guess=[vGu vGu vGu], errV=1e-12)
     
     omP = GJ_Model_ωp_vecSPH(x0_pl, time0, θm, ωPul, B0, rNS, zeroIn=false);
     
@@ -1230,10 +1231,11 @@ function get_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; vmea
     
     vel_near = zeros(Int(ntrajs), 3)
     for i in 1:Int(ntrajs)
-        randARR = float(rand(-1:2:1, 3))
-        vGuess = [rand() .* randARR[1] rand() .* randARR[2] rand() .* randARR[3]]
-        vGuess ./= sqrt.(sum(vGuess.^2))
-        k0, accur = solve_vel_CS(x0_pl[i, 2], x0_pl[i, 3], x0_pl[i, 1], vIfty ./ c_km, guess=vGuess, errV=1e-24)
+        vT1 = acos.(1.0 .- 2.0 .* rand());
+        vP1 = rand() .* 2π;
+        vGuess = 0.5 .* [sin.(vT1) .* cos.(vP1) sin.(vT1) .* sin.(vP1) cos.(vT1)]
+        
+        k0, accur = solve_vel_CS(x0_pl[i, 2], x0_pl[i, 3], x0_pl[i, 1], vIfty ./ c_km, guess=vGuess, errV=1e-12)
         vel_near[i, :] .= [k0[1]; k0[2]; k0[3]]
         
     end
