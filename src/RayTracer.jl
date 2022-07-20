@@ -575,6 +575,7 @@ end
 function solve_vel_CS(θ, ϕ, r, NS_vel; guess=[0.1 0.1 0.1], errV=1e-24, Mass_NS=1)
     ff = sum(NS_vel.^2); # unitless
     
+    
     GMr = GNew .* Mass_NS ./ r ./ (c_km .^ 2); # unitless
     rhat = [sin.(θ) .* cos.(ϕ) sin.(θ) .* sin.(ϕ) cos.(θ)]
 
@@ -627,6 +628,8 @@ function jacobian_fv(x_in, vel_loc)
     ϕ = atan.(x_in[2], x_in[1])
     θ = acos.(x_in[3] ./ rmag)
     
+    GMr = GNew .* 1.0 ./ rmag ./ (c_km .^ 2); # unitless
+    print(sqrt.(sum(vel_loc.^2)), "\t", 2 .* GMr, "\t", rmag, "\n")
     dvXi_dV = grad(v_infinity(θ, ϕ, rmag, seed(transpose(vel_loc)), v_comp=1));
     dvYi_dV = grad(v_infinity(θ, ϕ, rmag, seed(transpose(vel_loc)), v_comp=2));
     dvZi_dV = grad(v_infinity(θ, ϕ, rmag, seed(transpose(vel_loc)), v_comp=3));
@@ -1228,18 +1231,21 @@ function get_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; vmea
     rr = sqrt.(sum(xpos_flat.^2, dims=2))
     x0_pl = [rr acos.(xpos_flat[:,3] ./ rr) atan.(xpos_flat[:,2], xpos_flat[:,1])]
     
+    if ntrajs == 0
+        return 0, 0, 0, 0, 0
+    end
     
     vel_near = zeros(Int(ntrajs), 3)
     for i in 1:Int(ntrajs)
         vT1 = acos.(1.0 .- 2.0 .* rand());
         vP1 = rand() .* 2π;
-        vGuess = 0.5 .* [sin.(vT1) .* cos.(vP1) sin.(vT1) .* sin.(vP1) cos.(vT1)]
-        
-        k0, accur = solve_vel_CS(x0_pl[i, 2], x0_pl[i, 3], x0_pl[i, 1], vIfty ./ c_km, guess=vGuess, errV=1e-12)
+        vGuess = 0.01 .* [sin.(vT1) .* cos.(vP1) sin.(vT1) .* sin.(vP1) cos.(vT1)]
+        k0, accur = solve_vel_CS(x0_pl[i, 2], x0_pl[i, 3], x0_pl[i, 1], vIfty[i,:] ./ c_km, guess=vGuess, errV=1e-12)
         vel_near[i, :] .= [k0[1]; k0[2]; k0[3]]
         
     end
-
+    
+    
     return xpos_flat, rRND, ntrajs, vel_near, vIfty
     
 end

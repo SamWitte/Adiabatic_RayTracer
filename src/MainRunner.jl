@@ -485,6 +485,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         
         ϕ = atan.(view(xpos_flat, :, 2), view(xpos_flat, :, 1))
         θ = acos.(view(xpos_flat, :, 3)./ rmag)
+        
         for i in 1:length(rmag)
             jacVs[i] = RT.jacobian_fv(xpos_flat[i, :], velNorm_flat[i, :])
         end
