@@ -112,8 +112,8 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   truncated = false
  
   #DEBUG
-  print("NEW PARTICLE!\n")
-  #print("Initial conversion probability: ", Prob, "\n")
+  # print("NEW PARTICLE!\n")
+  # print("Initial conversion probability: ", Prob, "\n")
   #print("prob_cutoff: ", prob_cutoff, "\n")
   #print("max_nodes: ", max_nodes, "\n")
   #print("num_cutoff: ", num_cutoff, "\n")
@@ -147,7 +147,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     # Switch to celerity in polar coordinates
     AA = (1.0 .- r_s0 ./ rr)
     
-    w0_pl = [v0_pl[1] ./ sqrt.(AA)   v0_pl[2] ./ rr .* rr.^2  v0_pl[3] ./ (rr .* sin.(x0_pl[2])) .* (rr .* sin.(x0_pl[2])).^2 ]
+    w0_pl = [v0_pl[1] ./ sqrt.(AA)   v0_pl[2] ./ rr .* rr.^2  v0_pl[3] ./ (rr .* sin.(x0_pl[2])) .* (rr .* sin.(x0_pl[2])).^2 ] ./ AA
     g_tt, g_rr, g_thth, g_pp = RT.g_schwartz(x0_pl, Mass_NS);
     kpar = RT.K_par(x0_pl, w0_pl, [θm, ωPul, B0, rNS, zeros(length(x0_pl[:,1])), Mass_NS])
     if isotropic
@@ -159,7 +159,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     
     ksqr = g_tt .* erg.^2 .+ g_rr .* w0_pl[1].^2 .+ g_thth .* w0_pl[2].^2 .+
             g_pp .* w0_pl[3].^2
-    print("species: ", event.species, "\n")
+    # print("species: ", event.species, "\n")
     # print("HAMILTONIAN (for axion): ", .5*ksqr, "\n")
     # print("Bound if negative: ", 1 + ksqr[1]/Mass_a^2, "\n")
 
@@ -356,7 +356,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     Ntajs, gammaF, batchsize; flat=true, isotropic=false, melrose=false, thick_surface=true,
     ode_err=1e-6, cutT=100000, fix_time=Nothing, CLen_Scale=true, file_tag="",
     ntimes=1000, v_NS=[0 0 0], rho_DM=0.3, save_more=false, vmean_ax=220.0,
-    ntimes_ax=1000, dir_tag="results", n_maxSample=8, iseed=-1,
+    ntimes_ax=1000, dir_tag="results", n_maxSample=6, iseed=-1,
     num_cutoff=5,
     max_nodes=5,
     prob_cutoff=1e-10, 
@@ -441,13 +441,15 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     f_event = open(fname, "w")
     close(f_event)
 
+    small_batch = 2
+    
     tot_count = 0
     while photon_trajs < desired_trajs
         
         # First part of code here is just written to generate evenly spaced
         # samples of conversion surface
         while !filled_positions
-            xv, Rv, numV, vvec_in, vIfty_in = RT.get_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; vmean_ax=vmean_ax, v_NS=v_NS, n_max=n_maxSample, batchsize=2, thick_surface=thick_surface, iso=isotropic, melrose=melrose)
+            xv, Rv, numV, weights, vvec_in, vIfty_in = RT.find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_max=n_maxSample, batchsize=small_batch, thick_surface=thick_surface, iso=isotropic, melrose=false)
             f_inx += 2
             
             if numV == 0
