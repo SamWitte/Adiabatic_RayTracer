@@ -150,7 +150,7 @@ batchSize = parsed_args["batchSize"]; # how to batch runs
 CLen_Scale = false # if true, perform cut due to de-phasing
 cutT = 10000; # keep highest weight 'cutT' each batch
 fix_time = 0.0; # eval at fixed time = 0?
-file_tag = parsed_args["ftag"] * "_GR_";  # if you dont want to cut on Lc "_NoCutLc_";
+file_tag = parsed_args["ftag"];  # if you dont want to cut on Lc "_NoCutLc_";
 ode_err = 1e-6; # need strong error
 ntimes = 100 # how many points on photon traj to keep
 vNS = [parsed_args["vNS_x"] parsed_args["vNS_y"] parsed_args["vNS_z"]]; # relative neutron star velocity
@@ -224,29 +224,32 @@ function combine_files(Mass_a, Ax_g, θm, ωPul, B0, Ntajs, Nruns, ode_err, fix_
     fileL = String[];
     
     for i = 0:(Nruns-1)
-        file_tagL = file_tag * "_" * string(i)
-        if fix_time != Nothing
-            file_tagL *= "_fixed_time_"*string(fix_time);
-        end
-        file_tagL *= "_odeErr_"*string(ode_err);
-        file_tagL *= "_vxNS_"*string(v_NS[1]);
-        file_tagL *= "_vyNS_"*string(v_NS[2]);
-        file_tagL *= "_vzNS_"*string(v_NS[3]);
-        fileN = "results/Fast_Trajectories_MassAx_"*string(Mass_a)*"_AxionG_"*string(Ax_g)*"_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0);
-        fileN *= "_Ax_trajs_"*string(Ntajs);
-        fileN *= "_N_Times_"*string(ntimes)*"_"*file_tagL*"_.npz";
+        # file_tagL = file_tag * "_" * string(i)
+        # if fix_time != Nothing
+        #     file_tagL *= "_fixed_time_"*string(fix_time);
+        # end
+        # file_tagL *= "_odeErr_"*string(ode_err);
+        # file_tagL *= "_vxNS_"*string(v_NS[1]);
+        # file_tagL *= "_vyNS_"*string(v_NS[2]);
+        # file_tagL *= "_vzNS_"*string(v_NS[3]);
+        # fileN = "results/Fast_Trajectories_MassAx_"*string(Mass_a)*"_AxionG_"*string(Ax_g)*"_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0);
+        # fileN *= "_Ax_trajs_"*string(Ntajs);
+        # fileN *= "_N_Times_"*string(ntimes)*"_"*file_tagL*"_.npz";
+        fileN = "results/final_" * file_tag * string(i)
         push!(fileL, fileN);
     end
     
     hold = npzread(fileL[1]);
-    Base.Filesystem.rm(fileL[1]);
     
     # divide off by num files combining...
     for i = 2:Nruns
         hold = vcat(hold, npzread(fileL[i]));
-        Base.Filesystem.rm(fileL[i])
     end
     hold[:, 6] ./= Nruns;
+    
+#    for i = 1:Nruns
+#        Base.Filesystem.rm(fileL[i])
+#    end
     
     fileN = "results/Fast_Trajectories_MassAx_"*string(Mass_a)*"_AxionG_"*string(Ax_g)*"_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0);
     fileN *= "_Ax_trajs_"*string(Ntajs * Nruns);
