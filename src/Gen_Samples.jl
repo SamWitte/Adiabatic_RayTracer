@@ -92,7 +92,7 @@ function parse_commandline()
         "--seed"
             arg_type = Int
             default = -1 # random seed
-        "--saveTree"
+        "--saveMode"
             arg_type = Int
             default = 1
         "--probCutoff"
@@ -160,7 +160,7 @@ melrose = true; # keep true, more efficient
 ntimes_ax = 500; # vector scan for resonance
 
 # Tree parameters
-saveTree = parsed_args["saveTree"]
+saveMode = parsed_args["saveMode"]
 num_cutoff = parsed_args["numCutoff"]
 prob_cutoff = parsed_args["probCutoff"]
 max_nodes = parsed_args["maxNodes"]
@@ -202,7 +202,7 @@ if parsed_args["run_RT"] == 1
               flat=flat, isotropic=isotropic, melrose=melrose, ode_err=ode_err,
               cutT=cutT, fix_time=fix_time, CLen_Scale=CLen_Scale,
               file_tag=file_tag, ntimes=ntimes, v_NS=vNS, ntimes_ax=ntimes_ax,
-              saveTree=saveTree, num_cutoff=num_cutoff, 
+              saveMode=saveMode, num_cutoff=num_cutoff, 
               prob_cutoff=prob_cutoff, iseed=seed, max_nodes=max_nodes)
   else 
     @inbounds @fastmath single_runner(
