@@ -683,11 +683,10 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                                           weightC^2 * exp.(-opticalDepth) )
 
 
-                  print(saveAll, "\n")
                   if saveMode > 0 # Save more
                     row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1]]
                   else
-                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp Δω]
+                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω]
                   end
                   if isnothing(saveAll)
                     saveAll = row
@@ -730,7 +729,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     #for i=1:length(saveAll)
     #  saveAll[i][2] /= float(f_inx)
     ###end
-    saveAll[:, 7] ./= 0#float(f_inx) # divide off by N trajectories sampled
+    saveAll[:, 8] ./= float(f_inx) # divide off by N trajectories sampled
     fileN = dir_tag*"/npz/tree_"
     fileN *= "MassAx_"*string(Mass_a)*"_AxionG_"*string(Ax_g)
     #fileN *="_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0)
