@@ -109,16 +109,6 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   count = -1
   count_main = 0
  
-  truncated = false
- 
-  #DEBUG
-  # print("NEW PARTICLE!\n")
-  # print("Initial conversion probability: ", Prob, "\n")
-  #print("prob_cutoff: ", prob_cutoff, "\n")
-  #print("max_nodes: ", max_nodes, "\n")
-  #print("num_cutoff: ", num_cutoff, "\n")
-  #print("ax_num: ", ax_num, "\n")
-
   while length(events) > 0
     
     count += 1
@@ -128,70 +118,6 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     
     pos0 = [event.x event.y event.z]
     k0 = [event.kx event.ky event.kz]
-
-    ######3## DEBUG
-    # Compute hamiltonian
-    x0 = pos0
-    erg = erg_inf_ini
-    r_s0 = 2.0 * Mass_NS * GNew / c_km^2
-    rr = sqrt.(sum(x0.^2))
-    # r theta phi
-    x0_pl = [rr acos.(x0[3] ./ rr) atan.(x0[2], x0[1])]
-    omP = RT.GJ_Model_ωp_vecSPH(x0_pl, zeros(length(x0_pl[:,1])), θm, ωPul, B0, rNS, zeroIn=true);
-    
-    # vr, vtheta, vphi --- Define lower momenta and upper indx pos
-    # [unitless, unitless, unitless ]
-    dr_dt = sum(x0 .* k0) ./ rr
-    v0_pl = [dr_dt (x0[3] .* dr_dt .- rr .* k0[3]) ./ (rr .* sin.(x0_pl[2])) (-x0[2] .* k0[1] .+ x0[1] .* k0[2]) ./ (rr .* sin.(x0_pl[2])) ];
-    
-    # Switch to celerity in polar coordinates
-    AA = (1.0 .- r_s0 ./ rr)
-    
-    w0_pl = [v0_pl[1] ./ sqrt.(AA)   v0_pl[2] ./ rr .* rr.^2  v0_pl[3] ./ (rr .* sin.(x0_pl[2])) .* (rr .* sin.(x0_pl[2])).^2 ] ./ AA
-    g_tt, g_rr, g_thth, g_pp = RT.g_schwartz(x0_pl, Mass_NS);
-    kpar = RT.K_par(x0_pl, w0_pl, [θm, ωPul, B0, rNS, zeros(length(x0_pl[:,1])), Mass_NS])
-    if isotropic
-        kpar .*= 0.0
-    end
-    NrmSq = (-erg.^2 .* g_tt .- omP.^2) ./ (w0_pl[:, 1].^2 .* g_rr .+  w0_pl[:, 2].^2 .* g_thth .+ w0_pl[:, 3].^2 .* g_pp .- omP.^2 .* kpar.^2 ./ (erg.^2 ./ g_rr))
-    w0_pl .*= sqrt.(NrmSq) # set particle on shell
-
-    
-    ksqr = g_tt .* erg.^2 .+ g_rr .* w0_pl[1].^2 .+ g_thth .* w0_pl[2].^2 .+
-            g_pp .* w0_pl[3].^2
-    # print("species: ", event.species, "\n")
-    # print("HAMILTONIAN (for axion): ", .5*ksqr, "\n")
-    # print("Bound if negative: ", 1 + ksqr[1]/Mass_a^2, "\n")
-
-    k_abs = sqrt(k0[1]^2   + k0[2]^2   + k0[3]^2) 
-    r_abs = sqrt(pos0[1]^2 + pos0[2]^2 + pos0[3]^2)
-    
-    k_r = (k0[1]*pos0[1] + k0[2]*pos0[2] + k0[3]*pos0[3])/r_abs^2 .* pos0
-    k_perp = k0 .- k_r
-
-    V_eff = (
-           -c_km^-2*Mass_NS*GNew/sqrt(pos0[1]^2 + pos0[2]^2 + pos0[3]^2)
-           -c_km^-2*Mass_NS*GNew/sqrt(pos0[1]^2 + pos0[2]^2 + pos0[3]^2)
-           *sum(k_perp.^2)
-            )*Mass_a
-    
-    V_a = 0.5*k_abs^2/Mass_a
-    #print(V_eff + V_a, "\n")
-    #print(erg_inf_ini - Mass_a, "\n")
-
-
-
-    #V_eff = (
-    #       -c_km^-2*Mass_NS*GNew/sqrt(pos0[1]^2 + pos0[2]^2 + pos0[3]^2)
-    #       -c_km^-2*Mass_NS*GNew/sqrt(pos0[1]^2 + pos0[2]^2 + pos0[3]^2)
-    #       *sum(k_perp.^2)/2/Mass_a^2
-    #        )*Mass_a
-    #V_a = 0.5*Mass_a*k_abs^2/Mass_a^2
-    #print("--- V_eff: ", V_eff, "\n")
-    #print("--- V_axion:  ", V_a, "\n")
-    #print("V_a + V_eff: ", V_a + V_eff, "\n")
-
-    ############
 
     # propagate photon or axion
     if event.species == "photon"
@@ -325,7 +251,6 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     end
 
     # Add to tree
-    #print("Pushed event\n") # DEBUG
     push!(tree, event)
 
     if tot_prob >= 1 - prob_cutoff
@@ -364,28 +289,15 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
 
     if iseed < 0
       iseed = rand(0:1000000)
-      #print("Using seed ", iseed, "\n") # DEBUG
       Random.seed!(iseed)
     elseif iseed == 0
       Random.seed!()
     else
-      #print("Using seed ", iseed, "\n") # DEBUG
       Random.seed!(iseed)
     end
 
-
     batchsize=1
-    saveAll = nothing#Array{Float64}
-    #saveAll = Vector{Any}()
-    #eventData = Vector{Any}()
-    #if saveMode > 0
-    #  saveAll = Array{Float64}()
-    #!!!  eventData = [Vector{Float64}(), 0., 0., 0., 0., 0., 0., 0., 0.]
-    #else
-    #  saveAll = Array{Float64}()
-    #!!!  eventData = [Vector{Float64}(), 0., 0., 0., 0.]
-    #!!!  #eventData = zeros(5)
-    #end
+    saveAll = nothing
 
     if saveMode <= 3 
       ntimes = 3 # Times to store in ODE
@@ -545,8 +457,11 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         # to-do: 
         #  - Proper handling of time to account for time dependence of
-        #    magnetosphere in unaligned rotators 
+        #    magnetosphere in misaligned rotators 
         #  - Include weightC and optical depth
+        #  - Include energy dispersion for misaligned rotators (larger ntimes?)
+        #  - Clean up "batchsize=1"
+        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
         for i in 1:batchsize
 
@@ -578,19 +493,6 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                 num_cutoff=0, splittings_cutoff=100000, ax_num=ntimes)
           nb = nb[1]
 
-          #!!!# Save event information to file
-          #!!!eventData[1] = [] #information about outgoing photons
-          #!!!eventData[2] = sln_prob[1] # photons per second, has to be weighted by
-          #!!!                        # weight*weightC^2*exp.(-opticalDepth)
-          #!!!eventData[3] = xpos_flat[i,1]
-          #!!!eventData[4] = xpos_flat[i,2]
-          #!!!eventData[5] = xpos_flat[i,3]
-          #!!!if saveMode>0
-          #!!!  eventData[6] = k_init[i,1]
-          #!!!  eventData[7] = k_init[i,2]
-          #!!!  eventData[8] = k_init[i,3]
-          #!!!  eventData[9] = calpha
-          #!!!end
           if saveMode > 1
             # Store event information
             write(f_event,
@@ -693,17 +595,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                   else
                     saveAll = [saveAll; row]
                   end
-
-
-                  #!!!if saveMode > 0 # Save more
-                  #!!!  append!(saveAll,
-                  #!!!    [id, θf, ϕf, θfX, ϕfX, absfX, weight_tmp, Δω,
-                  #!!!     tree[ii].weight, opticalDepth, weightC]
-                  #!!!  )
-                  #!!!else
-                  #!!!  append!(eventData[1],
-                  #!!!          [[id, θf, ϕf, θfX, ϕfX, absfX, weight_tmp, Δω]])
-                  #!!!end
+                
                 end
               end
             #end
@@ -718,17 +610,11 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
             close(f_final)
             close(f_event)
           end
-          #!!!append!(saveAll,[eventData])
 
         end # Batchsize, in any case 1...
 
-        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     end # while
-    print(saveAll, "\n---------------------\n")
-    #print(saveAll[1], "\n")
-    #for i=1:length(saveAll)
-    #  saveAll[i][2] /= float(f_inx)
-    ###end
+    
     saveAll[:, 8] ./= float(f_inx) # divide off by N trajectories sampled
     fileN = dir_tag*"/npz/tree_"
     fileN *= "MassAx_"*string(Mass_a)*"_AxionG_"*string(Ax_g)
