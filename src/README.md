@@ -9,12 +9,12 @@ mkdir -p results/npz/ results/tree/ results/event/
 The easiest way to use the Adiabatic Ray Tracer, is to run it from `Gen_Samples.jl`. 
 
 ```
-> julia Gen_Samples.jl --help
+>>> julia Gen_Samples.jl --help
 
-usage: Gen_Samples.jl [--combineFiles COMBINEFILES] [--ThetaM THETAM]
-                      [--Nts NTS] [--ftag FTAG] [--rotW ROTW]
-                      [--MassA MASSA] [--Axg AXG] [--B0 B0]
-                      [--run_RT RUN_RT] [--run_Combine RUN_COMBINE]
+usage: Gen_Samples.jl [--ThetaM THETAM] [--Nts NTS] [--ftag FTAG]
+                      [--rotW ROTW] [--MassA MASSA] [--Axg AXG]
+                      [--B0 B0] [--run_RT RUN_RT]
+                      [--run_Combine RUN_COMBINE]
                       [--side_runs SIDE_RUNS] [--rNS RNS]
                       [--Mass_NS MASS_NS] [--vNS_x VNS_X]
                       [--vNS_y VNS_Y] [--vNS_z VNS_Z]
@@ -23,10 +23,6 @@ usage: Gen_Samples.jl [--combineFiles COMBINEFILES] [--ThetaM THETAM]
                       [--maxNodes MAXNODES] [--seed SEED] [-h]
 
 optional arguments:
-  --combineFiles COMBINEFILES
-                        Should the raytracer be run, or should be only
-                        combine the results with 'ftag'? 0: run
-                        raytracer (type: Int64, default: 0)
   --ThetaM THETAM       misalignment angle in rad (type: Float64,
                         default: 0.2)
   --Nts NTS             number photon trajectories (type: Int64,
@@ -55,10 +51,10 @@ optional arguments:
   --vNS_y VNS_Y         vel NS y in c (type: Float64, default: 0.0)
   --vNS_z VNS_Z         vel NS z in c (type: Float64, default: 0.0)
   --saveMode SAVEMODE   What data do we store?  0: Only the essentials
-                        in a npz file  1: More information in the npz
+                        in a npy file  1: More information in the npy
                         file  2: Save also in clear text with more
                         information  3: Save entire tree (type: Int64,
-                        default: 1)
+                        default: 0)
   --probCutoff PROBCUTOFF
                         Stop the generation of the tree when the total
                         probability/weight of all outgoing particles
@@ -79,16 +75,22 @@ optional arguments:
                         subtrees. (type: Int64, default: 5)
   --maxNodes MAXNODES   The number of total subbrances to compute
                         before the generation of the tree is stopped.
-                        (type: Int64, default: 5)
+                        (type: Int64, default: 50)
   --seed SEED           Seed for random number generator. Use seed=-1
                         for a random seed (type: Int64, default: -1)
   -h, --help            show this help message and exit
 ```
 
+Before anything is run, make sure that the output folders are created!
+
+```
+mkdir -p results/npy/ results/tree/ results/event/
+```
 
 ## Output files
 
 * `--saveMode 0`  
+    The results are stored in an npy-file: 
     `[photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight xpos[1] xpos[2] xpos[3] Δω]`
     + `photon_trajs`: event number
     + `id`: 1: photon, 0: axion  
@@ -100,6 +102,7 @@ optional arguments:
     + `Δω`: energy dispetsion **Not yet implemented**
 
 * `--saveMode 1`  
+    More results are stored in the npy-file:
     `[photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight xpos[1] xpos[2] xpos[3] Δω tree_weight opticalDepth weightC k_init[1] k_init[2] k_init[3] calpha[1], c, info]`
     + `photon_trajs`: event number
     + `id`: 1: photon, 0: axion  
@@ -116,6 +119,19 @@ optional arguments:
     + `calpha`: ???
     + `c`: number of subranches that have been considered in the call to `generate_tree`. Note that `generate_tree` is called seperately for the photon and axion in the first crossing.
     + `info`: stop reason. 1: no cutoff, 2: probCutoff, 3: numCutoff, 4: maxNodes, negative: MCNodes reached
+
+* `--saveMode 2`  
+    In addition to the npy-file, some additional information is stored in clear text in the `results/event/` folder.  
+    + `final_*` contains the information about outgoing particles. The content
+    is written to the file on line 631 in MainRunner.jl.
+    `Event number | final weight | species (0: axion, 1: photon) | final momentum in spherical coordinates [theta|phi|abs] | final position in spherical coordinates [theta|phi|abs] | time at final crossing (was used for some testing) | Computation time`
+
+    + `event_*` contains information about the MC drawing. The content is written to the file on line 566 and 652.
+    `Event number | velocity at infinity (vIfty) in cartesian coordinates [x|y|z] | incoming axions per second (sln_prob) | position and momentum of incoming (fully backtraced) axion in cartesian coordinates [x|y|z|kx|ky|kz] | position and momentum of the MC selection [x|y|z|kx|ky|kz]`
+
+
+* `--saveMode 3`
+    In adiition to the event information, the trajectories of each particle in the tree is stored in `results/tree/`. See `plot/plot_tree.py` for more information.
 
 ## TODO
 - Check time-input and output of "propagate" for unaligned rotators
