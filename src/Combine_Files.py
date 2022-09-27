@@ -16,16 +16,16 @@ for fin in sys.argv[2:]:
                 +f"from the Adiabatic Raytracer code. I do not recognize '{f}' "
                 + "as such...")
         if data is None:
-            data = load(f)
+            data = load(f).T
         else:
-            tmp = load(f)
-            tmp[:, 0] += data[-1, 0]
+            tmp = load(f).T
+            tmp[0, :] += data[0, -1]
             data = append(data, tmp, axis=1)
         nfiles += 1
 if nfiles == 0: raise Exception("No files given as input!")
 
 # divide off by num files combining...
-data[:, 8] /= nfiles
+data[9, :] /= nfiles
 
 print(f"Saving the results in {sys.argv[1]}...")
-save(sys.argv[1], data)
+save(sys.argv[1], data.T)

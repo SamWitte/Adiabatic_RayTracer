@@ -90,7 +90,7 @@ function parse_commandline()
                    " 2: Save also in clear text with more information "        *
                    " 3: Save entire tree"
             arg_type = Int
-            default = 1
+            default = 0
         "--probCutoff"
             help = "Stop the generation of the tree when the total "           *
                    "probability/weight of all outgoing particles has reached " *
@@ -117,7 +117,7 @@ function parse_commandline()
             help = "The number of total subbrances to compute before the "     *
                    "generation of the tree is stopped."
             arg_type = Int
-            default = 5
+            default = 50
         "--seed"
             help = "Seed for random number generator. Use seed=-1 for a "*
                    "random seed"

@@ -108,6 +108,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
 
   count = -1
   count_main = 0
+  info = 1
  
   while length(events) > 0
     
@@ -254,16 +255,19 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     push!(tree, event)
 
     if tot_prob >= 1 - prob_cutoff
+      info = 2
       break
     end
     if num_cutoff <= 0 && splittings_cutoff > 0
       break
     end
     if count_main >= num_cutoff
+      info = 3
       break
     end
 
     if count > max_nodes
+      info = 4
       break
     end
 
@@ -272,7 +276,11 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
 
   end
 
-  return tree, count 
+  if count > MC_nodes
+    info = -abs(info)
+  end
+
+  return tree, count, info 
 
 end
 
@@ -478,7 +486,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                 -k_init[i, 1], -k_init[i, 2], -k_init[i, 3], 0.,
                 "axion", 1.0, 1.0, -1.0)
           # The simplest is always the best: make use of existing code
-          nb, _ = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
+          nb, _, _ = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
                 flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
                 num_cutoff=0, splittings_cutoff=100000, ax_num=ntimes)
@@ -530,7 +538,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
               parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
                       -nb.kxc[end], -nb.kyc[end], -nb.kzc[end], nb.tc[end],
                       species[j], probs[j], probs[j], 1.0)
-              tree, c = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
+              tree, c, info = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                   Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
                   flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
                   num_cutoff=num_cutoff,ax_num=ntimes,MC_nodes=MC_nodes,
@@ -580,9 +588,9 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
 
 
                   if saveMode > 0 # Save more
-                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω c tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1]]
+                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1] c info]
                   else
-                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω c]
+                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω]
                   end
                   if isnothing(saveAll)
                     saveAll = row
