@@ -1,11 +1,11 @@
 import numpy as np
 import os
 
-os.system("mkdir -p results/event/  results/npz/ results/tree/")
+os.system("mkdir -p results/event/  results/npy/ results/tree/")
 
 # (saveMode==0)
-os.system("nice -20 julia Gen_Samples.jl --MassA=2e-5 --Axg=1e-18  --type=1 --probCutoff=1e-10 --numCutoff=5 --Nts=10 --seed=1769 --saveMode=0 --ftag=test0")
-res = np.load("results/npz/tree_MassAx_2.0e-5_AxionG_1.0e-18_Ax_trajs_10_N_maxSample_6_num_cutoff_5_max_nodes_5_iseed_1769_test0_.npz")
+#os.system("nice -20 julia Gen_Samples.jl --MassA=2e-5 --Axg=1e-18 --probCutoff=1e-10 --numCutoff=5 --Nts=10 --seed=1769 --saveMode=0 --ftag=test0")
+res = np.load("results/npy/tree_MassAx_2.0e-5_AxionG_1.0e-18_Ax_trajs_10_N_maxSample_6_num_cutoff_5_MC_nodes_5_max_nodes_5_iseed_1769_test0.npy")
 event_num   = res[:, 0]
 particle_id = np.array(res[:, 1], dtype=int)
 thetaf      = res[:, 2] # Momentum theta
@@ -25,8 +25,8 @@ print("--saveMode=0")
 print(res)
 
 # Save more (saveMode>0)
-os.system("nice -20 julia Gen_Samples.jl --MassA=2e-5 --Axg=1e-18  --type=1 --probCutoff=1e-10 --numCutoff=5 --Nts=10 --seed=1769 --saveMode=1 --ftag=test1")
-res = np.load("results/npz/tree_MassAx_2.0e-5_AxionG_1.0e-18_Ax_trajs_10_N_maxSample_6_num_cutoff_5_max_nodes_5_iseed_1769_test1_.npz")
+os.system("nice -20 julia Gen_Samples.jl --MassA=2e-5 --Axg=1e-18 --probCutoff=1e-10 --numCutoff=5 --Nts=10 --seed=1769 --saveMode=1 --ftag=test1")
+res = np.load("results/npy/tree_MassAx_2.0e-5_AxionG_1.0e-18_Ax_trajs_10_N_maxSample_6_num_cutoff_5_MC_nodes_5_max_nodes_5_iseed_1769_test1.npy")
 event_num   = res[:, 0]
 particle_id = np.array(res[:, 1], dtype=int)
 thetaf      = res[:, 2] # Momentum theta

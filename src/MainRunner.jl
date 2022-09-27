@@ -86,7 +86,7 @@ end
 function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,flat,isotropic,melrose,
     NumerPass; num_cutoff=5, prob_cutoff=1e-10,splittings_cutoff=-1,
-    ax_num=100, max_nodes=5)
+    ax_num=100, MC_nodes=5, max_nodes=50)
 
 
 
@@ -215,7 +215,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
       if splittings_cutoff <= 0 # stop at each crossing
 
         # This event is taking too long! We transition to a pure MC
-        if count > max_nodes
+        if count > MC_nodes
           r = rand(Float64)
           #print("MC: ", r, " ", Prob[1], "\n")
           if r < Prob[1]
@@ -263,7 +263,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
       break
     end
 
-    if count > 50
+    if count > max_nodes
       break
     end
 
@@ -278,13 +278,13 @@ end
 
 
 function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
-    Ntajs, gammaF, batchsize; flat=true, isotropic=false, melrose=false,
+    Ntajs, gammaF; flat=true, isotropic=false, melrose=false,
     thick_surface=true,
-    ode_err=1e-6, cutT=100000, fix_time=Nothing, CLen_Scale=true, file_tag="",
-    ntimes=1000, v_NS=[0 0 0], rho_DM=0.3, saveMode=0, vmean_ax=220.0,
+    ode_err=1e-6, cutT=100000, fix_time=0.0, CLen_Scale=true, file_tag="",
+    ntimes=1000, v_NS=[0 0 0], rho_DM=0.3, vmean_ax=220.0, saveMode=0,
     ntimes_ax=1000, dir_tag="results", n_maxSample=6, iseed=-1,
     num_cutoff=5,
-    max_nodes=5,
+    MC_nodes=5, max_nodes=50,
     prob_cutoff=1e-10)
 
     if iseed < 0
@@ -454,15 +454,6 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         sln_prob = weight_angle .* phaseS .* (1e5 .^ 2) .* c_km .* 1e5 .*
                    mcmc_weights # axions in per second
 
-        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        # to-do: 
-        #  - Proper handling of time to account for time dependence of
-        #    magnetosphere in misaligned rotators 
-        #  - Include weightC and optical depth
-        #  - Include energy dispersion for misaligned rotators (larger ntimes?)
-        #  - Clean up "batchsize=1"
-        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
         for i in 1:batchsize
 
           time0=time()
@@ -533,6 +524,8 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           probs = [1 - nb.Pc[end], nb.Pc[end]]
           count = 0 
           for j in [1 2]
+            # Remove comment to have a prob_cutoff for entire tree, and not
+            # for each of the two subtrees
             #if probs[j] > prob_cutoff # Skip if unlikely
               parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
                       -nb.kxc[end], -nb.kyc[end], -nb.kzc[end], nb.tc[end],
@@ -540,7 +533,8 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
               tree, c = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                   Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
                   flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
-                  num_cutoff=num_cutoff,ax_num=ntimes,max_nodes=max_nodes)
+                  num_cutoff=num_cutoff,ax_num=ntimes,MC_nodes=MC_nodes,
+                  max_nodes=max_nodes)
               count += c
               
               tot_count += length(tree)
@@ -586,9 +580,9 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
 
 
                   if saveMode > 0 # Save more
-                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1]]
+                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω c tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1]]
                   else
-                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω]
+                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω c]
                   end
                   if isnothing(saveAll)
                     saveAll = row
@@ -616,73 +610,19 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     end # while
     
     saveAll[:, 8] ./= float(f_inx) # divide off by N trajectories sampled
-    fileN = dir_tag*"/npz/tree_"
+    fileN = dir_tag*"/npy/tree_"
     fileN *= "MassAx_"*string(Mass_a)*"_AxionG_"*string(Ax_g)
     #fileN *="_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0)
     fileN *= "_Ax_trajs_"*string(Ntajs)
     #fileN *= "_N_Times_"*string(ntimes);
-    fileN *= "_N_maxSample_"*string(n_maxSample)
+    #fileN *= "_N_maxSample_"*string(n_maxSample)
     fileN *= "_num_cutoff_"*string(num_cutoff)
+    fileN *= "_MC_nodes_"*string(MC_nodes)
     fileN *= "_max_nodes_"*string(max_nodes)
     fileN *= "_iseed_"*string(iseed)
-    fileN *= "_"*file_tag*"_.npz"
+    fileN *= "_"*file_tag*".npy"
     npzwrite(fileN, saveAll)
 
     return tot_count
 
-end
-
-
-# NB! This function is not tested with the newest updated of the code!
-function single_runner(species, x0, y0, z0, kx0, ky0, kz0,
-    Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
-    Ntajs, gammaF, batchsize; flat=true, isotropic=false, melrose=false,
-    ode_err=1e-5, cutT=100000, fix_time=Nothing, CLen_Scale=true, file_tag="",
-    ntimes=1000, v_NS=[0 0 0], rho_DM=0.3, save_more=false, vmean_ax=220.0,
-    ntimes_ax=10000, dir_tag="results", iseed=-1, num_cutoff=5,
-    prob_cutoff=1e-10, info_level=5,
-    forwards=true)
-
-
-    rmag = sqrt(x0^2 + y0^2 + z0^2)
-    vmag = sqrt.(2 * GNew .* Mass_NS ./ rmag) ; # km/s
-    
-    # sample asymptotic velocity
-    vIfty=erfinv.(2 .* rand(length(vmag),3) .- 1.) .* vmean_ax .+ v_NS#km/s
-    vIfty_mag = sqrt.(sum(vIfty.^2));
-    gammaA = 1 ./ sqrt.(1.0 .- (vIfty_mag ./ c_km).^2 )
-    erg_inf_ini = Mass_a .* sqrt.(1 .+ (vIfty_mag ./ c_km .* gammaA).^2)
-        
-    # define min and max time to propagate photons
-    ln_t_start = -22;
-    ln_t_end = log.(1 ./ ωPul);
-    NumerPass = vec([ln_t_start, ln_t_end, ode_err])
-
-    # Normalise k
-    norm = sqrt(kx0^2 + ky0^2 + kz0^2)
-    kx0 = kx0/norm
-    ky0 = ky0/norm
-    kz0 = kz0/norm
-
-    if forwards
-      parent = RT.node(x0, y0, z0, kx0, ky0, kz0,0.,
-            species, 1.0, 1.0, -1.0)
-      tree = get_tree(parent,erg_inf_ini,vIfty_mag,
-            Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
-            flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
-            num_cutoff=num_cutoff)
-    else
-      parent = RT.node(x0, y0, z0, kx0, ky0, kz0,0.,
-            species, 1.0, 1.0, -1.0)
-      tree_backwards = get_tree(parent,erg_inf_ini,vIfty_mag,
-            Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
-            flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
-            num_cutoff=num_cutoff)
-    end
-
-    fname = dir_tag * "/tree/tree_" * file_tag * "single" 
-    f = open(fname, "w")
-    for ii in 1:length(tree)
-       saveNode(f, tree[ii])
-    end
 end
