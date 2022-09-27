@@ -1,8 +1,25 @@
-# Adiabatic Ray Tracer
+# Adiabatic Ray Tracer -- Full tree generation
 
 ```
 mkdir -p results/npz/ results/tree/ results/event/
 ```
+
+## Algorithm
+
+Since the trees in general are expected to be quite small, we generate the
+entire tree (up to the parameter `MCNodes`). 
+The axion drawn by the Monte Carlo is backtraced to the first conversion
+surface it encountered.
+
+Each particle is forward propagated until it reaches a new conversion surface,
+or we are certain that it will not encounter additional conversion surfaces
+(either escape or hit the neutron star [if photon]).
+
+Any any given time, the particle that carries the highest weight is considered.
+
+Note that `get_tree` is called seperately for each of the two *daughter*
+particles (photon and axion) from the first crossing. Thus, the stopping
+criterions are applied seperately on the two sub-trees.
 
 ## Usage
 
