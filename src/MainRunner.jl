@@ -476,7 +476,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           end
           if saveMode > 2 # Entire tree
             # Entire tree; one file each
-            fname = dir_tag * "/tree_" * file_tag * string(photon_trajs) 
+            fname = dir_tag * "/tree/tree_" * file_tag * string(photon_trajs) 
             if saveTree>0 f = open(fname, "w") end
           end
 
