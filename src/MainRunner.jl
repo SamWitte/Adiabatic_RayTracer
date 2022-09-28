@@ -364,11 +364,11 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     
     if saveMode > 1 # Clear text
       # Information about each final particle
-      fname = dir_tag * "/final_" * file_tag
+      fname = dir_tag * "/event/final_" * file_tag
       f_final = open(fname, "w")
       close(f_final)
       # Information about the event
-      fname = dir_tag * "/event_" * file_tag 
+      fname = dir_tag * "/event/event_" * file_tag 
       f_event = open(fname, "w")
       close(f_event)
     end
