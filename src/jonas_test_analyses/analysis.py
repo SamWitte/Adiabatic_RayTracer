@@ -6,7 +6,7 @@ Mass_a = 2e-5
 c_km = 2.99792e5
 
 def load_event_info(tag=""):
-    data     = np.loadtxt("results/event_"+tag+"_GR_")
+    data     = np.loadtxt("results/event/event_"+tag)
     num      = data[:,0]
     vIfty    = data[:,1:4]
     sln_prob = data[:,4]
@@ -19,7 +19,7 @@ def load_event_info(tag=""):
     return num, vIfty, sln_prob, x_in, k_in, x0, k0, time, nodes
 
 def load_final_info(tag=""):
-    data     = np.loadtxt("results/final_"+tag+"_GR_")
+    data     = np.loadtxt("results/event/final_"+tag)
     num      = np.array(data[:,0], dtype=int)
     weight   = data[:,1]
     species  = data[:,2]
@@ -32,8 +32,7 @@ def load_final_info(tag=""):
     t = data[:, 9]
     return num, weight, species, theta_f, phi_f, abs_f, theta_Xf,phi_Xf,abs_Xf,t
 
-for tag in ["low_coupling", "1e-10_MC","1e-11_MC","1e-12_MC","1e-13_MC",
-    "1e-14_MC","1e-15_MC"]:
+for tag in ["convergence_1e-10","convergence_5e-11","convergence_1e-11"]:
 
 
     try:
@@ -105,8 +104,7 @@ for tag in ["low_coupling", "1e-10_MC","1e-11_MC","1e-12_MC","1e-13_MC",
 
 # Convergence plots
 plt.figure()
-for tag in ["1e-10_MC","1e-11_MC","1e-12_MC","1e-13_MC",
-    "1e-14_MC","1e-15_MC"]:
+for tag in ["convergence_1e-10","convergence_5e-11","convergence_1e-11"]:
 
     try:
         num0,vIfty,sln_prob,x_in,k_in,x0,k0,time,nodes = load_event_info(tag)
