@@ -82,7 +82,7 @@ savefig = True
 showfig = True
 
 fname = "tree_med_GR_3"
-fname = "tree_2e-5_1e-13_GR_46"
+fname = "tree__GR_1"
 tree = load_tree("results/" + fname)
 
 fig = plt.figure(figsize=(9, 7))

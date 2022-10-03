@@ -222,6 +222,7 @@ end
 function combine_files(Mass_a, Ax_g, θm, ωPul, B0, Ntajs, Nruns, ode_err, fix_time, file_tag, ntimes, v_NS)
    
     fileL = String[];
+    fileL_EV = String[];
     
     for i = 0:(Nruns-1)
         # file_tagL = file_tag * "_" * string(i)
@@ -239,7 +240,7 @@ function combine_files(Mass_a, Ax_g, θm, ωPul, B0, Ntajs, Nruns, ode_err, fix_
         push!(fileL, fileN);
     end
     
-    hold = npzread(fileL[1]);
+    # hold = npzread(fileL[1]);
     
     # divide off by num files combining...
     for i = 2:Nruns
