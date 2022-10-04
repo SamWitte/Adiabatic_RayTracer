@@ -185,48 +185,55 @@ time0=Dates.now()
 
 
 
-function combine_files(Mass_a, Ax_g, θm, ωPul, B0, Ntajs, Nruns, ode_err, fix_time, file_tag, ntimes, v_NS)
+function combine_files(Mass_a, Ax_g, θm, ωPul, B0, Ntajs, Nruns, ode_err, fix_time, file_tag, ntimes, v_NS, dir_tag, num_cutoff, MC_nodes, max_nodes)
    
     fileL = String[];
-    fileL_EV = String[];
     
     for i = 0:(Nruns-1)
-        # file_tagL = file_tag * "_" * string(i)
-        # if fix_time != Nothing
-        #     file_tagL *= "_fixed_time_"*string(fix_time);
-        # end
-        # file_tagL *= "_odeErr_"*string(ode_err);
-        # file_tagL *= "_vxNS_"*string(v_NS[1]);
-        # file_tagL *= "_vyNS_"*string(v_NS[2]);
-        # file_tagL *= "_vzNS_"*string(v_NS[3]);
-        # fileN = "results/Fast_Trajectories_MassAx_"*string(Mass_a)*"_AxionG_"*string(Ax_g)*"_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0);
-        # fileN *= "_Ax_trajs_"*string(Ntajs);
-        # fileN *= "_N_Times_"*string(ntimes)*"_"*file_tagL*"_.npz";
-        fileN = "results/final_" * file_tag * string(i)
+    
+        fileN = dir_tag*"/npy/tree_"
+        fileN *= "MassAx_"*string(Mass_a)*"_AxionG_"*string(Ax_g)
+        fileN *="_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0)
+        fileN *= "_Ax_trajs_"*string(Ntajs)
+        fileN *= "_N_Times_"*string(ntimes);
+        fileN *= "_num_cutoff_"*string(num_cutoff)
+        fileN *= "_MC_nodes_"*string(MC_nodes)
+        fileN *= "_max_nodes_"*string(max_nodes)
+        fileN *= "_"*file_tag*string(i)*".npy"
+        
         push!(fileL, fileN);
     end
     
-    # hold = npzread(fileL[1]);
+    hold = npzread(fileL[1]);
     
     # divide off by num files combining...
     for i = 2:Nruns
         hold = vcat(hold, npzread(fileL[i]));
     end
-    hold[:, 6] ./= Nruns;
+    hold[:, 8] ./= Nruns;
     
-#    for i = 1:Nruns
-#        Base.Filesystem.rm(fileL[i])
-#    end
     
-    fileN = "results/Fast_Trajectories_MassAx_"*string(Mass_a)*"_AxionG_"*string(Ax_g)*"_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0);
-    fileN *= "_Ax_trajs_"*string(Ntajs * Nruns);
-    fileN *= "_N_Times_"*string(ntimes)*"_"*file_tag*"_.npz";
+    fileN = dir_tag*"/"
+    fileN *= "MassAx_"*string(Mass_a)*"_AxionG_"*string(Ax_g)
+    fileN *="_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0)
+    fileN *= "_Ax_trajs_"*string(Ntajs * Nruns)
+    fileN *= "_N_Times_"*string(ntimes);
+    fileN *= "_num_cutoff_"*string(num_cutoff)
+    fileN *= "_MC_nodes_"*string(MC_nodes)
+    fileN *= "_max_nodes_"*string(max_nodes)
+    fileN *= "_"*file_tag*".npy"
+
     npzwrite(fileN, hold);
+    
+    for i = 1:Nruns
+        Base.Filesystem.rm(fileL[i])
+    end
+    
 end
 
 
 if parsed_args["run_Combine"] == 1
-    combine_files(Mass_a, Ax_g, θm, ωPul, B0, Ntajs, parsed_args["side_runs"], ode_err, fix_time, file_tag, ntimes, vNS);
+    combine_files(Mass_a, Ax_g, θm, ωPul, B0, Ntajs, parsed_args["side_runs"], ode_err, fix_time, file_tag, ntimes, vNS, dir_tag, num_cutoff, MC_nodes, max_nodes);
 end
 
 

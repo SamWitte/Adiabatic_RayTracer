@@ -620,14 +620,14 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     saveAll[:, 8] ./= float(f_inx) # divide off by N trajectories sampled
     fileN = dir_tag*"/npy/tree_"
     fileN *= "MassAx_"*string(Mass_a)*"_AxionG_"*string(Ax_g)
-    #fileN *="_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0)
+    fileN *="_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0)
     fileN *= "_Ax_trajs_"*string(Ntajs)
-    #fileN *= "_N_Times_"*string(ntimes);
+    fileN *= "_N_Times_"*string(ntimes);
     #fileN *= "_N_maxSample_"*string(n_maxSample)
     fileN *= "_num_cutoff_"*string(num_cutoff)
     fileN *= "_MC_nodes_"*string(MC_nodes)
     fileN *= "_max_nodes_"*string(max_nodes)
-    fileN *= "_iseed_"*string(iseed)
+    # fileN *= "_iseed_"*string(iseed)
     fileN *= "_"*file_tag*".npy"
     npzwrite(fileN, saveAll)
 
