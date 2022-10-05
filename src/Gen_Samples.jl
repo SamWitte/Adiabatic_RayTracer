@@ -171,6 +171,7 @@ print("Axion parameters: ", Mass_a, "\n", Ax_g, "\n")
 
 time0=Dates.now()
 
+if parsed_args["run_RT"] == 1
 @inbounds @fastmath main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS,
               Mass_NS, ωProp, Ntajs, gammaF;
               flat=flat, isotropic=isotropic, melrose=melrose,
@@ -182,7 +183,7 @@ time0=Dates.now()
               saveMode=saveMode, num_cutoff=num_cutoff,
               prob_cutoff=prob_cutoff, iseed=seed, MC_nodes=MC_nodes,
               max_nodes=max_nodes)
-
+end
 
 
 function combine_files(Mass_a, Ax_g, θm, ωPul, B0, Ntajs, Nruns, ode_err, fix_time, file_tag, ntimes, v_NS, dir_tag, num_cutoff, MC_nodes, max_nodes)
