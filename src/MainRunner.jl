@@ -308,7 +308,8 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     saveAll = nothing
 
     if saveMode <= 3 
-      ntimes = 3 # Times to store in ODE
+      # ntimes = 3 # Times to store in ODE
+      ntimes = 100 # Times to store in ODE
     end
 
     # Identify the maximum distance of the conversion surface from NS
@@ -477,7 +478,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           if saveMode > 2 # Entire tree
             # Entire tree; one file each
             fname = dir_tag * "/tree/tree_" * file_tag * string(photon_trajs) 
-            f = open(fname, "w") end
+            f = open(fname, "w")
           end
 
           # Find previous crossings...
@@ -546,7 +547,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
               count += c
               
               tot_count += length(tree)
-
+              
               # Store results
               for ii in 1:length(tree)
                 if saveMode>2 saveNode(f, tree[ii]) end
