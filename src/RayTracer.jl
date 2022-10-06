@@ -632,15 +632,12 @@ function jacobian_fv(x_in, vel_loc)
     ϕ = atan.(x_in[2], x_in[1])
     θ = acos.(x_in[3] ./ rmag)
     
-    GMr = GNew .* 1.0 ./ rmag ./ (c_km .^ 2); # unitless
-    # print(sqrt.(sum(vel_loc.^2)), "\t", 2 .* GMr, "\t", rmag, "\n")
     dvXi_dV = grad(v_infinity(θ, ϕ, rmag, seed(transpose(vel_loc)), v_comp=1));
     dvYi_dV = grad(v_infinity(θ, ϕ, rmag, seed(transpose(vel_loc)), v_comp=2));
     dvZi_dV = grad(v_infinity(θ, ϕ, rmag, seed(transpose(vel_loc)), v_comp=3));
     
-    
     JJ = det([dvXi_dV; dvYi_dV; dvZi_dV])
-    # print("test vel... ", [dvXi_dV; dvYi_dV; dvZi_dV], "\n")
+
     return abs.(JJ).^(-1)
 end
 
@@ -648,18 +645,19 @@ function v_infinity(θ, ϕ, r, vel_loc; v_comp=1, Mass_NS=1)
     vx, vy, vz = vel_loc
     vel_loc_mag = sqrt.(sum(vel_loc.^2))
     GMr = GNew .* Mass_NS ./ r ./ (c_km .^ 2); # unitless
-    
-    v_inf = sqrt.(vel_loc_mag.^2 .- 2 .* GMr); # unitless
-    
+
+    v_inf = sqrt.(vel_loc_mag.^2 .- (2 .* GMr)); # unitless
     rhat = [sin.(θ) .* cos.(ϕ) sin.(θ) .* sin.(ϕ) cos.(θ)]
+    r_dot_v = sum(vel_loc .* rhat)
     
-    denom = v_inf.^2 .+ GMr .- v_inf .* sum(vel_loc .* rhat);
+    denom = v_inf.^2 .+ GMr .- v_inf .* r_dot_v;
+    
     if v_comp == 1
-        v_inf_comp = (v_inf.^2 .* vx .+ v_inf .* GMr .* rhat[1] .- v_inf .* vx .* sum(vel_loc .* rhat)) ./ denom
+        v_inf_comp = (v_inf.^2 .* vx .+ v_inf .* GMr .* rhat[1] .- v_inf .* vx .* r_dot_v) ./ denom
     elseif v_comp == 2
-        v_inf_comp = (v_inf.^2 .* vy .+ v_inf .* GMr .* rhat[2] .- v_inf .* vy .* sum(vel_loc .* rhat)) ./ denom
+        v_inf_comp = (v_inf.^2 .* vy .+ v_inf .* GMr .* rhat[2] .- v_inf .* vy .* r_dot_v) ./ denom
     else
-        v_inf_comp = (v_inf.^2 .* vz .+ v_inf .* GMr .* rhat[3] .- v_inf .* vz .* sum(vel_loc .* rhat)) ./ denom
+        v_inf_comp = (v_inf.^2 .* vz .+ v_inf .* GMr .* rhat[3] .- v_inf .* vz .* r_dot_v) ./ denom
     end
     return v_inf_comp
 end
@@ -1278,7 +1276,7 @@ function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_m
        
         for i in 1:ntrajs
             for j in 1:3
-                vIfty[i,j] = v_infinity(θ[i], ϕ[i], rmag[i], v0[i, :]; v_comp=j, Mass_NS=Mass_NS)
+                vIfty[i,j] = v_infinity(θ[i], ϕ[i], rmag[i], transpose(v0[i, :]); v_comp=j, Mass_NS=Mass_NS)
             end
         end
         
