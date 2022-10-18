@@ -58,28 +58,46 @@ function saveNode(f, n)
 end
 
 function get_Prob_nonAD(pos::Array, kpos::Array,
-    Mass_a,Ax_g,θm,ωPul,B0,rNS,erg_inf_ini,vIfty_mag)
+    Mass_a,Ax_g,θm,ωPul,B0,rNS,erg_inf_ini,vIfty_mag,flat,isotropic)
 
-  Nc = length(pos[:, 1])
-  rmag = sqrt.(sum(pos.^ 2, dims=2));
-  vmag = sqrt.(2 * GNew .* Mass_NS ./ rmag) ; # km/s 
-  vmag_tot = sqrt.(vmag .^ 2 .+ vIfty_mag.^2); # km/s
-  Bvec, ωp = RT.GJ_Model_vec(pos, zeros(Nc), θm, ωPul, B0, rNS);
-  Bmag = sqrt.(sum(Bvec .* Bvec, dims=2))
-  newV = kpos
-  cθ = sum(newV .* Bvec, dims=2) ./ Bmag
- 
-  erg_ax = erg_inf_ini ./ sqrt.(1.0 .- 2 * GNew .* Mass_NS ./ rmag ./
-                                c_km.^2 );
-  B_tot = Bmag .* (1.95e-20) ; # GeV^2
+    Nc = length(pos[:, 1])
+    rmag = sqrt.(sum(pos.^ 2, dims=2));
+    theta_sf = acos.(pos[:,3] ./ rmag)
+    x0_pl = [rmag theta_sf atan.(pos[:,2], pos[:,1])]
   
-  MagnetoVars =  [θm, ωPul, B0, rNS, [1.0 1.0], zeros(Nc), erg_ax]
-  sln_δk = RT.dk_ds(pos, kpos, [func_use, MagnetoVars]);
-  conversion_F = sln_δk ./  (6.58e-16 .* 2.998e5) # 1/km^2;
-
-  Prob_nonAD = (π ./ 2 .* (Ax_g .* B_tot) .^2 ./ conversion_F .*
-          (1e9 .^2) ./ (vmag_tot ./ 2.998e5) .^2 ./
-          ((2.998e5 .* 6.58e-16) .^2) ./ sin.(acos.(cθ)).^4) #unitless
+    Bsphere = RT.GJ_Model_Sphereical(pos, Nc, θm, ωPul, B0, rNS; Mass_NS=Mass_NS, flat=flat)
+    ksphere = RT.k_sphere(pos, kpos, θm, ωPul, B0, rNS, Nc, Mass_NS, Mass_a, erg_inf_ini, flat)
+    Bmag = sqrt.(RT.spatial_dot(Bsphere, Bsphere, Nc, x0_pl, Mass_NS)) .* 1.95e-2; # eV^2
+    kmag = sqrt.(RT.spatial_dot(ksphere, ksphere, Nc, x0_pl, Mass_NS));
+    ctheta_B = RT.spatial_dot(Bsphere, ksphere, Nc, x0_pl, Mass_NS) .* 1.95e-2 ./ (kmag .* Bmag)
+    stheta_B = sin.(acos.(ctheta_B))
+    if isotropic
+        ctheta_B .*= 0.0
+        stheta_B ./= stheta_B
+    end
+        
+    erg_ax = erg_inf_ini ./ sqrt.(1.0 .- 2 * GNew .* Mass_NS ./ rmag ./ c_km.^2 );
+    Mvars =  [θm, ωPul, B0, rNS, [1.0, 1.0], Nc, Mass_NS, flat, isotropic, erg_ax]
+    sln_δw, angleVal = RT.dwp_ds(pos, ksphere, Mvars)
+    conversion_F = sln_δw ./  (hbar .* c_km) # 1/km^2;
+    
+    extra_term = Mass_a.^5 ./ (kmag.^2 .+ Mass_a.^2 .* stheta_B.^2).^2
+    Prob_nonAD = π ./ 2 .* (Ax_g .* 1e-9 .* Bmag).^2 .* stheta_B.^2 ./ (conversion_F .* kmag) .* extra_term ./ (c_km .* hbar).^2; #unitless
+    
+#    vmag = sqrt.(2 * GNew .* Mass_NS ./ rmag) ; # km/s
+#    vmag_tot = sqrt.(vmag .^ 2 .+ vIfty_mag.^2); # km/s
+#    Bvec, ωp = RT.GJ_Model_vec(pos, zeros(Nc), θm, ωPul, B0, rNS);
+#    Bmag = sqrt.(sum(Bvec .* Bvec, dims=2))
+#    newV = kpos
+#    cθ = sum(newV .* Bvec, dims=2) ./ Bmag
+    
+#    B_tot = Bmag .* (1.95e-20) ; # GeV^2
+#    MagnetoVars =  [θm, ωPul, B0, rNS, [1.0 1.0], zeros(Nc), erg_ax]
+#    sln_δk = RT.dk_ds(pos, kpos, [func_use, MagnetoVars]);
+#    conversion_F = sln_δk ./  (6.58e-16 .* 2.998e5) # 1/km^2;
+#    Prob_nonAD = (π ./ 2 .* (Ax_g .* B_tot) .^2 ./ conversion_F .*
+#          (1e9 .^2) ./ (vmag_tot ./ 2.998e5) .^2 ./
+#          ((2.998e5 .* 6.58e-16) .^2) ./ sin.(acos.(cθ)).^4) #unitless
 
 end
 
@@ -94,7 +112,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   pos = [first.x first.y first.z]
   kpos = [first.kx first.ky first.kz]
   Prob_nonAD = get_Prob_nonAD(pos,kpos,Mass_a,Ax_g,θm,ωPul,B0,rNS,
-                                  erg_inf_ini, vIfty_mag)
+                                  erg_inf_ini, vIfty_mag, flat, isotropic)
   Prob = 1 .- exp.(-Prob_nonAD)
   first.prob = Prob[1]
 
@@ -201,7 +219,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
 
       # Conversion probability
       Prob_nonAD = get_Prob_nonAD(pos,kpos,Mass_a,Ax_g,θm,ωPul,B0,rNS,
-                                  erg_inf_ini, vIfty_mag)
+                                  erg_inf_ini, vIfty_mag, flat, isotropic)
       Prob = 1 .- exp.(-Prob_nonAD)
       event.Pc = Prob
 
@@ -430,21 +448,29 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         
         
         # define angle between surface normal and velocity
-        calpha = RT.surfNorm(xpos_flat, velNorm_flat, [func_use,
-              [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS]],
-                             return_cos=true); # alpha
-        weight_angle = abs.(calpha);
-
+        # calpha = RT.surfNorm(xpos_flat, velNorm_flat, [func_use,
+        #       [θm, ωPul, B0, rNS, gammaF, ]],
+        #                      return_cos=true); # alpha
+        # weight_angle = abs.(calpha);
+        
+    
         # sample asymptotic velocity
         vIfty_mag = sqrt.(sum(vIfty.^2, dims=2));
         vel_eng = sum((vIfty ./ c_km).^ 2, dims = 2) ./ 2;
         gammaA = 1 ./ sqrt.(1.0 .- (vIfty_mag ./ c_km).^2 )
         erg_inf_ini = Mass_a .* sqrt.(1 .+ (vIfty_mag ./ c_km .* gammaA).^2)
+        erg_ax = erg_inf_ini ./ sqrt.(1.0 .- 2 * GNew .* Mass_NS ./ rmag ./ c_km.^2 );
+        
         
         # define initial momentum (magnitude)
         k_init = RT.k_norm_Cart(xpos_flat, velNorm_flat,  0.0, erg_inf_ini, θm,
                                 ωPul, B0, rNS, Mass_NS, Mass_a, melrose=melrose,
                                 isotropic=isotropic, flat=flat)
+                                
+        ksphere = RT.k_sphere(xpos_flat, k_init, θm, ωPul, B0, rNS, zeros(batchsize), Mass_NS, Mass_a, erg_inf_ini, flat)
+        sln_δw, angleVal = RT.dwp_ds(xpos_flat, ksphere, [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, flat, isotropic, erg_ax])
+        calpha = cos.(angleVal)
+        weight_angle = abs.(calpha)
         
         MagnetoVars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                        erg_inf_ini, flat, isotropic, melrose]
@@ -459,8 +485,10 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         jacobian_GR = RT.g_det(x0_pl, zeros(batchsize),
                             θm, ωPul, B0, rNS, Mass_NS; flat=flat); # unitless
         
-        phaseS = jacVs.*phaseS.*jacobian_GR
-        sln_prob = weight_angle .* phaseS .* (1e5 .^ 2) .* c_km .* 1e5 .*
+        dense_extra = 2 ./ sqrt.(π) * (1.0 ./ (220.0 ./ c_km)) .* sqrt.(2.0 * Mass_NS * GNew / c_km^2 ./ rmag)
+        # phaseS = jacVs.*phaseS.*jacobian_GR
+        phaseS = dense_extra.*phaseS.*jacobian_GR
+        sln_prob = (vmag ./ c_km) .* weight_angle .* phaseS .* (1e5 .^ 2) .* c_km .* 1e5 .*
                    mcmc_weights # axions in per second
 
         for i in 1:batchsize
