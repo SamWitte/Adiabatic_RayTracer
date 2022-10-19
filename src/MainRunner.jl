@@ -478,7 +478,6 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         
         # Needed for differential power
         # Note: optical depth and weightC are neglected here
-        phaseS =  (2 .* π .* maxR.^2) .* rho_DM  ./ Mass_a
         
         theta_sf = acos.(xpos_flat[:,3] ./ rmag)
         x0_pl = [rmag theta_sf atan.(xpos_flat[:,2], xpos_flat[:,1])]
@@ -487,7 +486,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         
         dense_extra = 2 ./ sqrt.(π) * (1.0 ./ (220.0 ./ c_km)) .* sqrt.(2.0 * Mass_NS * GNew / c_km^2 ./ rmag)
         # phaseS = jacVs.*phaseS.*jacobian_GR
-        phaseS = dense_extra.*phaseS.*jacobian_GR
+        phaseS = dense_extra .* (2 .* π .* maxR.^2) .* (rho_DM .* 1e9)  ./ Mass_a .* jacobian_GR
         sln_prob = (vmag ./ c_km) .* weight_angle .* phaseS .* (1e5 .^ 2) .* c_km .* 1e5 .*
                    mcmc_weights # axions in per second
 
