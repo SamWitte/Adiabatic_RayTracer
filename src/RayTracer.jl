@@ -139,6 +139,7 @@ mutable struct node
   ky
   kz
   t
+  Δω
   species # Axion or photon?
   prob   # Conversion probability
   weight
@@ -150,15 +151,17 @@ mutable struct node
   kyc
   kzc
   tc
+  Δωc
   Pc # Conversion probability
   is_final
   traj    # Used to store entire trajectory
   mom    # Used to store entire momentum
+  disp
 end
 # Constructor
-node(x0=0.,y0=0.,z0=0.,kx0=0.,ky0=0.,kz0=0.,t0=0.,species0="axion",prob0=0.,
-     weight0=0.,parent_weight0=0.) = node(x0,y0,z0,kx0,ky0,kz0,t0,species0,
-            prob0,weight0,parent_weight0,[],[],[],[],[],[],[],[],false,[],[])
+node(x0=0.,y0=0.,z0=0.,kx0=0.,ky0=0.,kz0=0.,t0=0.,Δω0=0,species0="axion",prob0=0.,
+     weight0=0.,parent_weight0=0.) = node(x0,y0,z0,kx0,ky0,kz0,t0,Δω0,species0,
+      prob0,weight0,parent_weight0,[],[],[],[],[],[],[],[],[],false,[],[],[])
 #node(x=0.,y=0.,z=0.,kx=0.,ky=0.,kz=0.,t=0.,species="axion",prob=0.,weight=0.,
 #     parent_weight=0.,xc=[],yc=[],zc=[],kxc=[],kyc=[],kzc=[],tc=[],Pc=[],
 #    is_final=false,traj=[],mom=[]) = node(x,y,z,kx,ky,kz,t,species,prob,weight,
@@ -263,7 +266,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
       # Store crossings to be used later
       xc = []; yc = []; zc = []
       kxc = []; kyc = []; kzc = []
-      tc = []
+      tc = []; Δωc = []
 
       # Cut after given amount of crossings
       function condition(u, lnt, integrator)
@@ -295,8 +298,8 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
           push!( xc, xpos )
           push!( yc, ypos )
           push!( zc, zpos )
-
           push!( tc, exp(i.t) ) # proper time
+          push!( Δωc, i.u[7] )
 
           # Compute proper velocity
           r_s = 2.0 * Mass_NS * GNew / c_km^2
@@ -306,9 +309,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
           v_tmp = sin(i.u[2])*v_pl[1] + cos(i.u[2])*v_pl[2]
           push!( kxc, cos(i.u[3])*v_tmp   - sin(i.u[3])*v_pl[3] )
           push!( kyc, sin(i.u[3])*v_tmp   + cos(i.u[3])*v_pl[3] )
-          push!( kzc, cos(i.u[2])*v_pl[1] - sin(i.u[2])*v_pl[2] )
-
-        
+          push!( kzc, cos(i.u[2])*v_pl[1] - sin(i.u[2])*v_pl[2] ) 
 
           # Check if we want to stop ODE
           i.opts.userdata[:callback_count] +=1
@@ -410,7 +411,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     GC.gc();
     
     if make_tree
-      return x_reshaped,v_reshaped,dt,fail_indx,cut_short,xc,yc,zc,kxc,kyc,kzc,tc
+      return x_reshaped,v_reshaped,dt,fail_indx,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc
     else
       return x_reshaped,v_reshaped,dt,fail_indx
     end
