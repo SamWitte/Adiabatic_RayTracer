@@ -156,10 +156,11 @@ mutable struct node
   is_final
   traj    # Used to store entire trajectory
   mom    # Used to store entire momentum
-  disp
+  erg
 end
 # Constructor
-node(x0=0.,y0=0.,z0=0.,kx0=0.,ky0=0.,kz0=0.,t0=0.,Δω0=0,species0="axion",prob0=0.,
+node(x0=0.,y0=0.,z0=0.,kx0=0.,ky0=0.,kz0=0.,t0=0.,Δω0=-1.0,
+     species0="axion",prob0=0.,
      weight0=0.,parent_weight0=0.) = node(x0,y0,z0,kx0,ky0,kz0,t0,Δω0,species0,
       prob0,weight0,parent_weight0,[],[],[],[],[],[],[],[],[],false,[],[],[])
 #node(x=0.,y=0.,z=0.,kx=0.,ky=0.,kz=0.,t=0.,species="axion",prob=0.,weight=0.,
@@ -170,7 +171,7 @@ node(x0=0.,y0=0.,z0=0.,kx0=0.,ky0=0.,kz0=0.,t0=0.,Δω0=0,species0="axion",prob0
 
 # propogate photon module
 function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
-    make_tree=false, is_axion=false, Mass_a=1e-6, max_crossings=3)
+    make_tree=false, is_axion=false, Mass_a=1e-6, max_crossings=3, Δω=-1.0)
     ln_tstart, ln_tend, ode_err = NumerP
     
     tspan = (ln_tstart, ln_tend)
@@ -216,10 +217,10 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     w0_pl .*= 1.0 ./ erg # switch to dt and renormalize for order 1 vals
     
     # Define initial conditions so that u0[1] returns a list of x positions (again, 1 entry for each axion trajectory) etc.
-    
-    
-    u0 = ([x0_pl w0_pl -erg])
+    u0 = ([x0_pl w0_pl erg .* Δω])
+    #u0 = ([x0_pl w0_pl -erg])
     # u0 = ([x0_pl w0_pl])
+    print("erg ", erg, " Δω ", Δω, "\n")
    
     bounce_threshold = 0.0
 
@@ -299,7 +300,8 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
           push!( yc, ypos )
           push!( zc, zpos )
           push!( tc, exp(i.t) ) # proper time
-          push!( Δωc, i.u[7] )
+          push!( Δωc, i.u[7]/erg )
+          print("+++", i.u[7]/erg, "\n")
 
           # Compute proper velocity
           r_s = 2.0 * Mass_NS * GNew / c_km^2
@@ -409,7 +411,9 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     x0_pl = nothing;
     dr_dt = nothing;
     GC.gc();
-    
+   
+    print("dt: ", dt, "\n") # DEBUG
+
     if make_tree
       return x_reshaped,v_reshaped,dt,fail_indx,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc
     else

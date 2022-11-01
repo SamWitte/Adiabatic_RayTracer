@@ -112,7 +112,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   pos = [first.x first.y first.z]
   kpos = [first.kx first.ky first.kz]
   Prob_nonAD = get_Prob_nonAD(pos,kpos,Mass_a,Ax_g,θm,ωPul,B0,rNS,
-                                  erg_inf_ini, vIfty_mag, flat, isotropic)
+                      erg_inf_ini .* abs.(first.Δω), vIfty_mag, flat, isotropic)
   Prob = 1 .- exp.(-Prob_nonAD)
   first.prob = Prob[1]
 
@@ -142,6 +142,8 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     NumerPass[1] = log(max(event.t, exp(-22))) # Time of start
 
     #print("NumerPass: ", NumerPass, "\n") # DEBUG
+
+    Δω = event.Δω[end]
           
     # propagate photon or axion
     if event.species == "photon"
@@ -150,21 +152,21 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
       x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc = RT.propagate(
                       func_use_SPHERE, pos0, k0,
                       ax_num, Mvars, NumerPass, RT.func!,
-                      true, false, Mass_a, splittings_cutoff)
+                      true, false, Mass_a, splittings_cutoff,Δω)
     else      
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose, Mass_a]
       x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc = RT.propagate(
                         func_use_SPHERE, pos0, k0,
                         ax_num, Mvars, NumerPass, RT.func_axion!,
-                        true, true, Mass_a, splittings_cutoff)
+                        true, true, Mass_a, splittings_cutoff,Δω)
     end
     pos = transpose(x_e[1, :, :])
     kpos = transpose(k_e[1, :, :])
     
     event.traj = pos
     event.mom = kpos
-    event.disp = transpose(t_e[1, :])
+    event.erg = transpose(t_e[1, :])
     
     #print("Dispersion: ", event.dip, "\n") # DEBUG
 
@@ -231,7 +233,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
 
       # Conversion probability
       Prob_nonAD = get_Prob_nonAD(pos,kpos,Mass_a,Ax_g,θm,ωPul,B0,rNS,
-                                  erg_inf_ini, vIfty_mag, flat, isotropic)
+                            erg_inf_ini .* abs.(Δω), vIfty_mag, flat, isotropic)
       Prob = 1 .- exp.(-Prob_nonAD)
       event.Pc = Prob
 
@@ -525,8 +527,8 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           # Find previous crossings...
           # Backwards in time equivalent to setting k->-k and vecB->-vecB
           parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
-                -k_init[i, 1], -k_init[i, 2], -k_init[i, 3], 0., # Δω0
-                0., "axion", 1.0, 1.0, -1.0)
+                -k_init[i, 1], -k_init[i, 2], -k_init[i, 3], 0, -1.0, # Δω0
+                "axion", 1.0, 1.0, -1.0)
           # The simplest is always the best: make use of existing code
           nb, _, _ = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
@@ -563,7 +565,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
             nb.kyc = [-k_init[i, 2]] # "-" since it should have been backtraced
             nb.kzc = [-k_init[i, 3]]
             nb.tc  = [0.0]
-            nb.Δωc = [0.0]
+            nb.Δωc = [-1.0]
             nb.Pc  = [nb.prob]
           end
 
@@ -628,7 +630,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                   # ---
                   weight_tmp = tree[ii].weight * (
                                           weightC^2 * exp.(-opticalDepth) )
-                  Δω = tree[ii].disp[end] ./ Mass_a .+ vel_eng[:]
+                  Δω = tree[ii].erg[end] ./ Mass_a .+ vel_eng[:]
                   print("Δω: ", Δω, "\n") # DEBUG
 
                   if saveMode > 0 # Save more
