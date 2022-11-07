@@ -468,26 +468,26 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                                 isotropic=isotropic, flat=flat)
                                 
         ksphere = RT.k_sphere(xpos_flat, k_init, θm, ωPul, B0, rNS, zeros(batchsize), Mass_NS, Mass_a, erg_inf_ini, flat)
-        sln_δw, angleVal = RT.dwp_ds(xpos_flat, ksphere, [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, flat, isotropic, erg_ax])
+        # sln_δw, angleVal = RT.dwp_ds(xpos_flat, ksphere, [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, flat, isotropic, erg_ax])
+        sln_δw, angleVal, k_dot_N, dwdk_snorm, vg_mu  = RT.dwp_ds(xpos_flat, ksphere,  [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, flat, isotropic, erg_ax])
         calpha = cos.(angleVal)
         weight_angle = abs.(calpha)
         
         MagnetoVars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                        erg_inf_ini, flat, isotropic, melrose]
-                   # θm, ωPul, B0, rNS, gamma factors, Time = 0, mass_ns, erg ax
+
         
         # Needed for differential power
         # Note: optical depth and weightC are neglected here
         
         theta_sf = acos.(xpos_flat[:,3] ./ rmag)
         x0_pl = [rmag theta_sf atan.(xpos_flat[:,2], xpos_flat[:,1])]
-        jacobian_GR = RT.g_det(x0_pl, zeros(batchsize),
-                            θm, ωPul, B0, rNS, Mass_NS; flat=flat); # unitless
+        jacobian_GR = RT.g_det(x0_pl, zeros(batchsize), θm, ωPul, B0, rNS, Mass_NS; flat=flat); # unitless
         
         dense_extra = 2 ./ sqrt.(π) * (1.0 ./ (220.0 ./ c_km)) .* sqrt.(2.0 * Mass_NS * GNew / c_km^2 ./ rmag)
         # phaseS = jacVs.*phaseS.*jacobian_GR
         phaseS = dense_extra .* (2 .* π .* maxR.^2) .* (rho_DM .* 1e9)  ./ Mass_a .* jacobian_GR
-        sln_prob = (vmag ./ c_km) .* weight_angle .* phaseS .* (1e5 .^ 2) .* c_km .* 1e5 .*
+        sln_prob = abs.(k_dot_N) .* phaseS .* (1e5 .^ 2) .* c_km .* 1e5 .*
                    mcmc_weights # axions in per second
 
         for i in 1:batchsize
