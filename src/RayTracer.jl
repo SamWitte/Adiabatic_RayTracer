@@ -547,10 +547,6 @@ function k_norm_Cart(x0, khat, time0, erg, θm, ωPul, B0, rNS, Mass_NS, Mass_a;
         
     NrmSq = (-erg.^2 .* g_tt .- Mass_a.^2) ./ (w0_pl[:, 1].^2 .* g_rr .+  w0_pl[:, 2].^2 .* g_thth .+ w0_pl[:, 3].^2 .* g_pp )
     
-    # TEST!
-    # val = hamiltonian(x0_pl, sqrt.(NrmSq) .* w0_pl, 0.0, sqrt.(-erg.^2 .* g_tt), θm, ωPul, B0, rNS, Mass_NS; iso=isotropic, melrose=melrose) ./ sqrt.(-erg.^2 .* g_tt).^2
-    # val2 = hamiltonian(x0_pl .*  1.01, sqrt.(NrmSq) .* w0_pl, 0.0, sqrt.(-erg.^2 .* g_tt), θm, ωPul, B0, rNS, Mass_NS; iso=isotropic, melrose=melrose) ./ sqrt.(-erg.^2 .* g_tt).^2
-    # print("testing... \t", val, "\n", val2, "\n\n")
           
     return sqrt.(NrmSq) .* khat
     
@@ -1072,7 +1068,7 @@ function Find_Conversion_Surface(Ax_mass, t_in, θm, ω, B0, rNS, gammaL, relati
     # estimate max dist
     om_test = GJ_Model_ωp_scalar(rNS .* [sin.(θmEV) 0.0 cos.(θmEV)], t_in, θm, ω, B0, rNS);
     rc_guess = rNS .* (om_test ./ Ax_mass) .^ (2.0 ./ 3.0);
-
+    
     return rc_guess .* 1.1 # add a bit just for buffer
 end
 
@@ -1184,9 +1180,9 @@ function dwp_ds(xIn, ksphere, Mvars)
     kB_norm = spatial_dot(Bsphere, ksphere ./ kmag, ntrajs, x0_pl, Mass_NS)
     
     v_ortho = -(Bsphere .- kB_norm .* ksphere ./ kmag)
-    v_norm = sqrt.(spatial_dot(v_ortho, v_ortho, ntrajs, x0_pl, Mass_NS))
+    v_ortho ./= sqrt.(spatial_dot(v_ortho, v_ortho, ntrajs, x0_pl, Mass_NS))
     
-    dy_op = spatial_dot(v_ortho ./ v_norm, grad_omP, ntrajs, x0_pl, Mass_NS)
+    dy_op = spatial_dot(v_ortho, grad_omP, ntrajs, x0_pl, Mass_NS)
     Bmag = sqrt.(spatial_dot(Bsphere, Bsphere, ntrajs, x0_pl, Mass_NS));
     ctheta_B = spatial_dot(Bsphere , ksphere, ntrajs, x0_pl, Mass_NS) ./ (kmag .* Bmag)
     stheta_B = sin.(acos.(ctheta_B))
@@ -1198,17 +1194,28 @@ function dwp_ds(xIn, ksphere, Mvars)
     xi = stheta_B .^2 ./ (1.0 .- ctheta_B.^2 .* omP.^2 ./ ωErg.^2)
     w_prime = dz_op .+ omP.^2 ./ ωErg.^2 .* xi ./ (stheta_B ./ ctheta_B) .* dy_op
     
-    # TEST
+    # group velocity based on millar
     snorm = grad_omP ./ sqrt.(g_rr .* grad_omP[:, 1].^2  .+ g_thth .* grad_omP[:, 2].^2 .+ g_pp .* grad_omP[:, 3].^2)
-    vec2 = ksphere ./ kmag .+ omP.^2 ./ ωErg.^2 .* xi ./ (stheta_B ./ ctheta_B) .* v_ortho ./ v_norm
+    vec2 = ksphere ./ kmag .+ omP.^2 ./ ωErg.^2 .* xi ./ (stheta_B ./ ctheta_B) .* v_ortho
     vec2Norm = sqrt.(spatial_dot(vec2, vec2, ntrajs, x0_pl, Mass_NS));
     angleVal = acos.(spatial_dot(vec2 ./ vec2Norm, snorm, ntrajs, x0_pl, Mass_NS))
+    kdotN = spatial_dot(ksphere, snorm, ntrajs, x0_pl, Mass_NS)
     
-   
+    # this is group velocity based on dwdk
+    ωErg_inf = ωErg .* g_rr
+    test = grad(hamiltonian(x0_pl, seed(ksphere), t_start, -ωErg_inf, θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=true)) .* (g_rr ./ -ωErg_inf)
+    test[:, 1] ./= g_rr
+    test[:, 2] ./= g_thth
+    test[:, 3] ./= g_pp
+    vgN = sqrt.(spatial_dot(test, test, ntrajs, x0_pl, Mass_NS));
+    dwdk_snorm = acos.(spatial_dot(test ./ vgN, snorm, ntrajs, x0_pl, Mass_NS))
+    # print(cos.(dwdk_snorm), "\t", cos.(angleVal), "\t", stheta_B, "\n")
+    
+
     if !isotropic
-        return abs.(w_prime), angleVal
+        return abs.(w_prime), angleVal, kdotN, dwdk_snorm, test ./ vgN
     else
-       return abs.(dz_op), angleVal
+       return abs.(dz_op), angleVal, kdotN, dwdk_snorm, test ./ vgN
     end
 end
 
