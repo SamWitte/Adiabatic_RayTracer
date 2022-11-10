@@ -106,8 +106,6 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     NumerPass; num_cutoff=5, prob_cutoff=1e-10,splittings_cutoff=-1,
     ax_num=100, MC_nodes=5, max_nodes=50)
 
-
-
   # Initial conversion probability
   pos = [first.x first.y first.z]
   kpos = [first.kx first.ky first.kz]
@@ -129,6 +127,8 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   count_main = 0
   info = 1
  
+  dt0 = exp(NumerPass[1])
+
   while length(events) > 0
     
     count += 1
@@ -139,12 +139,15 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     pos0 = [event.x event.y event.z]
     k0 = [event.kx event.ky event.kz]
 
-    NumerPass[1] = log(max(event.t, exp(-22))) # Time of start
+    Δω = event.Δω[end]      
+    NumerPass[1] = log(max(event.t, dt0)) # Time of start
 
-    #print("NumerPass: ", NumerPass, "\n") # DEBUG
+    if (Δω > -0.5 || Δω < -2.0)
+      print("The energy is changed by a factor ", -Δω, "... ")
+      print("Something is probably wrong!\n")
+    end
 
-    Δω = event.Δω[end]
-          
+
     # propagate photon or axion
     if event.species == "photon"
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
@@ -167,9 +170,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     event.traj = pos
     event.mom = kpos
     event.erg = transpose(t_e[1, :])
-    
-    #print("Dispersion: ", event.dip, "\n") # DEBUG
-
+   
     if length(xc) < 1  # No crossings
         # Since we are considering the most probable first
         count_main += 1
@@ -228,8 +229,8 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
       event.kxc = kxc
       event.kyc = kyc
       event.kzc = kzc
-      event.tc = tc #.+ event.t
-      event.Δωc = Δωc #.+ event.t
+      event.tc = tc 
+      event.Δωc = Δωc
 
       # Conversion probability
       Prob_nonAD = get_Prob_nonAD(pos,kpos,Mass_a,Ax_g,θm,ωPul,B0,rNS,
@@ -264,10 +265,10 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
 
           # Store full tree
           push!(events, RT.node(xc[1], yc[1], zc[1], kxc[1], kyc[1], kzc[1],
-              tc[1], Δωc, new_species, Prob[1], Prob[1]*event.weight,
+                    tc[1], Δωc[1], new_species, Prob[1], Prob[1]*event.weight,
               event.weight))
           push!(events, RT.node(xc[1], yc[1], zc[1], kxc[1], kyc[1], kzc[1],
-              tc[1], Δωc, event.species, 1-Prob[1],
+                                tc[1], Δωc[1], event.species, 1-Prob[1],
                           (1-Prob[1])*event.weight, event.weight))
 
         end
@@ -373,7 +374,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     tt_ax_zoom = LinRange(-2*t_diff, 2*t_diff, ntimes_ax);
 
     # define min and max time to propagate photons
-    ln_t_start = -22;
+    ln_t_start = -15;
     ln_t_end = log.(1 ./ ωPul);
     NumerPass = [ln_t_start, ln_t_end, ode_err];
     ttΔω = exp.(LinRange(ln_t_start, ln_t_end, ntimes));
@@ -630,8 +631,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                   # ---
                   weight_tmp = tree[ii].weight * (
                                           weightC^2 * exp.(-opticalDepth) )
-                  Δω = tree[ii].erg[end] ./ Mass_a .+ vel_eng[:]
-                  print("Δω: ", Δω, "\n") # DEBUG
+                  Δω = tree[ii].erg[end] ./ Mass_a .+ vel_eng[:] # Energy change
 
                   if saveMode > 0 # Save more
                     row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1] tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1] c info]
@@ -650,6 +650,8 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           end
 
           photon_trajs += 1
+
+          print(photon_trajs, " Time: ", time() - time0, "  (test: ", xpos_flat[end,1], xpos_flat[end,2], xpos_flat[end,3], ")\n")
       
           if saveMode > 2 close(f) end
           if saveMode > 1

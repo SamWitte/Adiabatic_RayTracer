@@ -19,7 +19,7 @@ function parse_commandline()
         "--ThetaM"
             help = "misalignment angle in rad"
             arg_type = Float64
-            default = 0.2
+            default = 0.0
         "--Nts"
             help = "number photon trajectories"
             arg_type = Int

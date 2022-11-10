@@ -217,10 +217,10 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     w0_pl .*= 1.0 ./ erg # switch to dt and renormalize for order 1 vals
     
     # Define initial conditions so that u0[1] returns a list of x positions (again, 1 entry for each axion trajectory) etc.
+    print(erg, " ", Δω, "\n")
     u0 = ([x0_pl w0_pl erg .* Δω])
     #u0 = ([x0_pl w0_pl -erg])
     # u0 = ([x0_pl w0_pl])
-    print("erg ", erg, " Δω ", Δω, "\n")
    
     bounce_threshold = 0.0
 
@@ -301,7 +301,6 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
           push!( zc, zpos )
           push!( tc, exp(i.t) ) # proper time
           push!( Δωc, i.u[7]/erg )
-          print("+++", i.u[7]/erg, "\n")
 
           # Compute proper velocity
           r_s = 2.0 * Mass_NS * GNew / c_km^2
@@ -332,22 +331,22 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
         cbset = CallbackSet(cb, cb_s, cb_r)
       end
 
-      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], reltol=1e-5, abstol=ode_err,
-                   max_iters=1e5, callback=cbset,
-                   userdata=Dict(:callback_count=>0, :max_count=>max_crossings),
-                   #max_iters=1e5, callback=callback,
-                   dtmin=1e-13, dtmax=1e-2, force_dtmin=true)
+      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], callback=cbset,
+                   userdata=Dict(:callback_count=>0, :max_count=>max_crossings))
     else
     #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     # Define the ODEproblem
-      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], reltol=1e-5, abstol=ode_err, max_iters=1e5, callback=cb, dtmin=1e-13, dtmax=1e-2, force_dtmin=true)
+      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], callback=cb)
     end
 
 
     # Solve the ODEproblem
-    sol = solve(prob, Vern6(), saveat=saveat)
-    # sol = solve(prob, lsoda(), saveat=saveat)
+    sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err,
+            max_iters=1e5, force_dtmin=true,
+            dtmin=1e-13, dtmax=1e-2)
+
     
+
     for i in 1:length(sol.u)
         sol.u[i][:,4:6] .*= erg
     end
@@ -412,8 +411,6 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     dr_dt = nothing;
     GC.gc();
    
-    print("dt: ", dt, "\n") # DEBUG
-
     if make_tree
       return x_reshaped,v_reshaped,dt,fail_indx,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc
     else
