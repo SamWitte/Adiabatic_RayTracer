@@ -151,10 +151,4 @@ mkdir -p results/npy/ results/tree/ results/event/
     In adiition to the event information, the trajectories of each particle in the tree is stored in `results/tree/`. See `plot/plot_tree.py` for more information.
 
 ## TODO
-- Check time-input and output of "propagate" for unaligned rotators
 - Include opticalDepth and weightC. This should be done for every photon in the tree, e.g. by including a new weight variable in the struct node which is inherited by its parent.
-- Check that `Δω=0` for axions
-{::comment}
-- Take into account the energy dispersion Δω for misaligned
-rotators. This must be stored in node and be inherited. Propagate must be edited to be able to accept the energy change as input.
-{:/comment}

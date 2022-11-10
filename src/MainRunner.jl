@@ -625,7 +625,6 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                   end
                   # ---
                   # See TODOs
-                  #Δω = 0
                   opticalDepth = 0
                   weightC = 1
                   # ---
