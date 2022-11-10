@@ -106,13 +106,11 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     NumerPass; num_cutoff=5, prob_cutoff=1e-10,splittings_cutoff=-1,
     ax_num=100, MC_nodes=5, max_nodes=50)
 
-
-
   # Initial conversion probability
   pos = [first.x first.y first.z]
   kpos = [first.kx first.ky first.kz]
   Prob_nonAD = get_Prob_nonAD(pos,kpos,Mass_a,Ax_g,θm,ωPul,B0,rNS,
-                                  erg_inf_ini, vIfty_mag, flat, isotropic)
+                      erg_inf_ini .* abs.(first.Δω), vIfty_mag, flat, isotropic)
   Prob = 1 .- exp.(-Prob_nonAD)
   first.prob = Prob[1]
 
@@ -122,12 +120,15 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   tree = []
 
   tot_prob = 0 # Total probability in tree
-  # Note: turned of to make bound orbits more likelytot_prob = 1 - first.prob
+  # Note: turned of to make bound orbits more likely
+  # tot_prob = 1 - first.prob
 
   count = -1
   count_main = 0
   info = 1
  
+  dt0 = exp(NumerPass[1])
+
   while length(events) > 0
     
     count += 1
@@ -138,29 +139,38 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     pos0 = [event.x event.y event.z]
     k0 = [event.kx event.ky event.kz]
 
+    Δω = event.Δω[end]      
+    NumerPass[1] = log(max(event.t, dt0)) # Time of start
+
+    if (Δω > -0.5 || Δω < -2.0)
+      print("The energy is changed by a factor ", -Δω, "... ")
+      print("Something is probably wrong!\n")
+    end
+
+
     # propagate photon or axion
     if event.species == "photon"
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose]
-      x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc = RT.propagate(
+      x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc = RT.propagate(
                       func_use_SPHERE, pos0, k0,
                       ax_num, Mvars, NumerPass, RT.func!,
-                      true, false, Mass_a, splittings_cutoff)
+                      true, false, Mass_a, splittings_cutoff,Δω)
     else      
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose, Mass_a]
-      x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc = RT.propagate(
+      x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc = RT.propagate(
                         func_use_SPHERE, pos0, k0,
                         ax_num, Mvars, NumerPass, RT.func_axion!,
-                        true, true, Mass_a, splittings_cutoff)
+                        true, true, Mass_a, splittings_cutoff,Δω)
     end
     pos = transpose(x_e[1, :, :])
     kpos = transpose(k_e[1, :, :])
     
     event.traj = pos
     event.mom = kpos
-
-
+    event.erg = transpose(t_e[1, :])
+   
     if length(xc) < 1  # No crossings
         # Since we are considering the most probable first
         count_main += 1
@@ -168,6 +178,9 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
         event.is_final = true
     else
 
+      ##########################################################################
+      # I have not experienced this in a long time. Still, I do not dare to
+      # delete anything...
       if any(abs.(kxc) .> 1) || any(abs.(kyc) .> 1) || any(abs.(kzc) .> 1)
         print("A rare fail occured, and I do not know why...\n")
         print("   xc:   ", xc, "\n")
@@ -180,7 +193,6 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
         tot_prob += event.weight
         continue
       end
-
       # If two crossings are close, it is likely only one crossing
       # This happens (likely only) close to the neutron star surface
       if length(xc) > 1
@@ -198,9 +210,11 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
           kyc = kyc[flag]
           kzc = kzc[flag]
           tc = tc[flag]
+          Δωc = Δωc[flag]
           print(sqrt.(xc.^2 + yc.^2 + zc.^2), "\n")
         end
       end
+      ##########################################################################
 
       # store level crossings
       Nc = length(xc)
@@ -215,11 +229,12 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
       event.kxc = kxc
       event.kyc = kyc
       event.kzc = kzc
-      event.tc = tc .+ event.t
+      event.tc = tc 
+      event.Δωc = Δωc
 
       # Conversion probability
       Prob_nonAD = get_Prob_nonAD(pos,kpos,Mass_a,Ax_g,θm,ωPul,B0,rNS,
-                                  erg_inf_ini, vIfty_mag, flat, isotropic)
+                            erg_inf_ini .* abs.(Δω), vIfty_mag, flat, isotropic)
       Prob = 1 .- exp.(-Prob_nonAD)
       event.Pc = Prob
 
@@ -239,19 +254,21 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
           #print("MC: ", r, " ", Prob[1], "\n")
           if r < Prob[1]
             push!(events, RT.node(xc[1], yc[1], zc[1], kxc[1], kyc[1], kzc[1],
-              tc[1], new_species, Prob[1], event.weight, event.weight))
+               tc[1], Δωc[1], new_species, Prob[1], event.weight, event.weight))
           else
             push!(events, RT.node(xc[1], yc[1], zc[1], kxc[1], kyc[1], kzc[1],
-              tc[1], event.species, 1-Prob[1], event.weight, event.weight))
+                                  tc[1], Δωc[1], event.species, 1-Prob[1],
+                                  event.weight, event.weight))
           end
 
         else
 
           # Store full tree
           push!(events, RT.node(xc[1], yc[1], zc[1], kxc[1], kyc[1], kzc[1],
-              tc[1], new_species, Prob[1], Prob[1]*event.weight, event.weight))
+                    tc[1], Δωc[1], new_species, Prob[1], Prob[1]*event.weight,
+              event.weight))
           push!(events, RT.node(xc[1], yc[1], zc[1], kxc[1], kyc[1], kzc[1],
-              tc[1], event.species, 1-Prob[1],
+                                tc[1], Δωc[1], event.species, 1-Prob[1],
                           (1-Prob[1])*event.weight, event.weight))
 
         end
@@ -260,7 +277,8 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
         
         for j in 1:Nc 
             push!(events, RT.node(xc[j], yc[j], zc[j], kxc[j], kyc[j], kzc[j],
-                tc[j], new_species, Prob[j], Prob[j]*event.weight, event.weight))
+                    tc[j], Δωc[j], new_species, Prob[j], Prob[j]*event.weight,
+                event.weight))
             event.weight = event.weight*(1-Prob[j]) # Re-weight of parent
         end
         tot_prob += event.weight
@@ -326,8 +344,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     saveAll = nothing
 
     if saveMode <= 3 
-      # ntimes = 3 # Times to store in ODE
-      ntimes = 100 # Times to store in ODE
+      ntimes = 3 # Times to store in ODE
     end
 
     # Identify the maximum distance of the conversion surface from NS
@@ -357,7 +374,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     tt_ax_zoom = LinRange(-2*t_diff, 2*t_diff, ntimes_ax);
 
     # define min and max time to propagate photons
-    ln_t_start = -22;
+    ln_t_start = -15;
     ln_t_end = log.(1 ./ ωPul);
     NumerPass = [ln_t_start, ln_t_end, ode_err];
     ttΔω = exp.(LinRange(ln_t_start, ln_t_end, ntimes));
@@ -511,7 +528,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           # Find previous crossings...
           # Backwards in time equivalent to setting k->-k and vecB->-vecB
           parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
-                -k_init[i, 1], -k_init[i, 2], -k_init[i, 3], 0.,
+                -k_init[i, 1], -k_init[i, 2], -k_init[i, 3], 0, -1.0, # Δω0
                 "axion", 1.0, 1.0, -1.0)
           # The simplest is always the best: make use of existing code
           nb, _, _ = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
@@ -549,6 +566,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
             nb.kyc = [-k_init[i, 2]] # "-" since it should have been backtraced
             nb.kzc = [-k_init[i, 3]]
             nb.tc  = [0.0]
+            nb.Δωc = [-1.0]
             nb.Pc  = [nb.prob]
           end
 
@@ -565,7 +583,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
             #if probs[j] > prob_cutoff # Skip if unlikely
               parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
                       -nb.kxc[end], -nb.kyc[end], -nb.kzc[end], nb.tc[end],
-                      species[j], probs[j], probs[j], 1.0)
+                      nb.Δωc[end], species[j], probs[j], probs[j], 1.0)
               tree, c, info = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                   Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
                   flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
@@ -607,18 +625,17 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                   end
                   # ---
                   # See TODOs
-                  Δω = 0
                   opticalDepth = 0
                   weightC = 1
                   # ---
                   weight_tmp = tree[ii].weight * (
                                           weightC^2 * exp.(-opticalDepth) )
-
+                  Δω = tree[ii].erg[end] ./ Mass_a .+ vel_eng[:] # Energy change
 
                   if saveMode > 0 # Save more
-                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1] c info tree[ii].prob]
+                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1] tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1] c info tree[ii].prob]
                   else
-                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω]
+                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1]]
                   end
                   if isnothing(saveAll)
                     saveAll = row
@@ -632,7 +649,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           end
 
           photon_trajs += 1
-      
+
           if saveMode > 2 close(f) end
           if saveMode > 1
             write(f_event, " ", string(time() - time0),
