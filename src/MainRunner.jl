@@ -634,7 +634,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                   Δω = tree[ii].erg[end] ./ Mass_a .+ vel_eng[:] # Energy change
 
                   if saveMode > 0 # Save more
-                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1] c info tree[ii].prob]
+                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1] tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1] c info tree[ii].prob]
                   else
                     row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1]]
                   end
@@ -651,8 +651,6 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
 
           photon_trajs += 1
 
-          print(photon_trajs, " Time: ", time() - time0, "  (test: ", xpos_flat[end,1], xpos_flat[end,2], xpos_flat[end,3], ")\n")
-      
           if saveMode > 2 close(f) end
           if saveMode > 1
             write(f_event, " ", string(time() - time0),

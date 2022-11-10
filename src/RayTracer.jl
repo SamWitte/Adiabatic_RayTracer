@@ -217,7 +217,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     w0_pl .*= 1.0 ./ erg # switch to dt and renormalize for order 1 vals
     
     # Define initial conditions so that u0[1] returns a list of x positions (again, 1 entry for each axion trajectory) etc.
-    print(erg, " ", Δω, "\n")
+    # Δω: relative energy change (is negative)
     u0 = ([x0_pl w0_pl erg .* Δω])
     #u0 = ([x0_pl w0_pl -erg])
     # u0 = ([x0_pl w0_pl])
