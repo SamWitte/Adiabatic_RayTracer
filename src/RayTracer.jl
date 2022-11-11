@@ -469,6 +469,32 @@ function hamiltonian(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=true, 
     return Ham
 end
 
+function omega_function(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=true, melrose=false, flat=false, zeroIn=false)
+    # if r < rNS, need to not run...
+    x[x[:,1] .< rNS, 1] .= rNS;
+
+    omP = GJ_Model_ωp_vecSPH(x, time0, θm, ωPul, B0, rNS, zeroIn=zeroIn);
+    
+    g_tt, g_rr, g_thth, g_pp = g_schwartz(x, Mass_NS);
+    ksqr = 0.0;
+    try
+        ksqr = g_rr .* k[:, 1].^2 .+ g_thth .* k[:, 2].^2 .+ g_pp .* k[:, 3].^2
+    catch
+        ksqr = g_rr .* k[1].^2 .+ g_thth .* k[2].^2 .+ g_pp .* k[3].^2
+    end
+    
+    if iso
+        Ham = (ksqr .+ omP.^2)
+    else
+        
+        kpar = K_par(x, k, [θm, ωPul, B0, rNS, time0, Mass_NS])
+        Ham = (ksqr .+ omP.^2 .+ sqrt.(ksqr.^2 .+ 2 .* ksqr .* omP.^2 .- 4 .* kpar.^2 .* omP.^2 .+ omP.^4)) ./ sqrt.(2)
+        
+    end
+    
+    return sqrt.(Ham)
+end
+
 function test_on_shell(x, v_loc, vIfty_mag, time0, θm, ωPul, B0, rNS, Mass_NS, Mass_a; iso=true, melrose=false, printStuff=false)
     # pass cartesian form
     # Define the Schwarzschild radius of the NS (in km)
@@ -1202,8 +1228,8 @@ function dwp_ds(xIn, ksphere, Mvars)
     kdotN = spatial_dot(ksphere, snorm, ntrajs, x0_pl, Mass_NS)
     
     # this is group velocity based on dwdk
-    ωErg_inf = ωErg .* g_rr
-    test = grad(hamiltonian(x0_pl, seed(ksphere), t_start, -ωErg_inf, θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=true)) .* (g_rr ./ -ωErg_inf)
+    ωErg_inf = ωErg .* sqrt.(g_rr)
+    test = grad(omega_function(x0_pl, seed(ksphere), t_start, -ωErg_inf, θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=true)) #
     test[:, 1] ./= g_rr
     test[:, 2] ./= g_thth
     test[:, 3] ./= g_pp
