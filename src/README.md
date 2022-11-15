@@ -136,6 +136,10 @@ mkdir -p results/npy/ results/tree/ results/event/
     + `calpha`: ???
     + `c`: number of subranches that have been considered in the call to `generate_tree`. Note that `generate_tree` is called seperately for the photon and axion in the first crossing.
     + `info`: stop reason. 1: no cutoff, 2: probCutoff, 3: numCutoff, 4: maxNodes, negative: MCNodes reached
+    + (debug) `tree[ii].prob`: latest factor in weight, i.e. conversion or survival probability of last level crossing.
+    + (debug) `tree[ii].prob_conv`: photon survival probability at last level crossing.
+    + (debug) `tree[ii].prob_conv0`: photon survival probability at the last conversion.
+
 
 * `--saveMode 2`  
     In addition to the npy-file, some additional information is stored in clear text in the `results/event/` folder.  

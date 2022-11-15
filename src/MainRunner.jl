@@ -252,13 +252,14 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
         if count > MC_nodes
           r = rand(Float64)
           #print("MC: ", r, " ", Prob[1], "\n")
-          if r < Prob[1]
+          if r < Prob[1] # New particle
             push!(events, RT.node(xc[1], yc[1], zc[1], kxc[1], kyc[1], kzc[1],
-               tc[1], Δωc[1], new_species, Prob[1], event.weight, event.weight))
-          else
+               tc[1], Δωc[1], new_species, Prob[1], event.weight, event.weight,
+               Prob[1],Prob[1]))
+          else # No conversion
             push!(events, RT.node(xc[1], yc[1], zc[1], kxc[1], kyc[1], kzc[1],
-                                  tc[1], Δωc[1], event.species, 1-Prob[1],
-                                  event.weight, event.weight))
+                            tc[1], Δωc[1], event.species, 1-Prob[1],
+                            event.weight, event.weight,Prob[1],event.prob_conv))
           end
 
         else
@@ -266,10 +267,11 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
           # Store full tree
           push!(events, RT.node(xc[1], yc[1], zc[1], kxc[1], kyc[1], kzc[1],
                     tc[1], Δωc[1], new_species, Prob[1], Prob[1]*event.weight,
-              event.weight))
+                    event.weight, Prob[1], Prob[1])) # New particle
           push!(events, RT.node(xc[1], yc[1], zc[1], kxc[1], kyc[1], kzc[1],
                                 tc[1], Δωc[1], event.species, 1-Prob[1],
-                          (1-Prob[1])*event.weight, event.weight))
+                    (1-Prob[1])*event.weight,
+                    event.weight, Prob[1], event.prob_conv)) # No conversion
 
         end
 
@@ -278,7 +280,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
         for j in 1:Nc 
             push!(events, RT.node(xc[j], yc[j], zc[j], kxc[j], kyc[j], kzc[j],
                     tc[j], Δωc[j], new_species, Prob[j], Prob[j]*event.weight,
-                event.weight))
+                    event.weight,Prob[1], Prob[1]))
             event.weight = event.weight*(1-Prob[j]) # Re-weight of parent
         end
         tot_prob += event.weight
@@ -509,6 +511,8 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
 
         for i in 1:batchsize
 
+          #print("NEW EVENT: ", photon_trajs, "\n") # DEBUG
+          
           time0=time()
 
           if saveMode > 1
@@ -529,7 +533,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           # Backwards in time equivalent to setting k->-k and vecB->-vecB
           parent = RT.node(xpos_flat[i, 1], xpos_flat[i, 2], xpos_flat[i, 3],
                 -k_init[i, 1], -k_init[i, 2], -k_init[i, 3], 0, -1.0, # Δω0
-                "axion", 1.0, 1.0, -1.0)
+                "axion", 1.0, 1.0, -1.0, -1.0, -1.0)
           # The simplest is always the best: make use of existing code
           nb, _, _ = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
@@ -581,9 +585,18 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
             # Remove comment to have a prob_cutoff for entire tree, and not
             # for each of the two subtrees
             #if probs[j] > prob_cutoff # Skip if unlikely
-              parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
+              if j == 1 # axion
+                parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
                       -nb.kxc[end], -nb.kyc[end], -nb.kzc[end], nb.tc[end],
-                      nb.Δωc[end], species[j], probs[j], probs[j], 1.0)
+                      nb.Δωc[end], species[j], probs[j], probs[j], 1.0,
+                      nb.Pc[end], -1.0)
+                                  # Original axion
+              else      # photon
+                parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
+                      -nb.kxc[end], -nb.kyc[end], -nb.kzc[end], nb.tc[end],
+                      nb.Δωc[end], species[j], probs[j], probs[j], 1.0,
+                      nb.Pc[end], nb.Pc[end])
+              end
               tree, c, info = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                   Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
                   flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
@@ -633,7 +646,10 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                   Δω = tree[ii].erg[end] ./ Mass_a .+ vel_eng[:] # Energy change
 
                   if saveMode > 0 # Save more
-                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1] tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1] c info tree[ii].prob]
+                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1] tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1] c info tree[ii].prob tree[ii].prob_conv tree[ii].prob_conv0]
+                    #print(id,  " ", weight_tmp, " ", tree[ii].prob, " ",
+                    #      tree[ii].prob_conv, " ",
+                    #      tree[ii].prob_conv0, "\n") # DEBUG
                   else
                     row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1]]
                   end

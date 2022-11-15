@@ -141,9 +141,12 @@ mutable struct node
   t
   Δω
   species # Axion or photon?
-  prob   # Conversion probability
+  prob   # Last instance in weight
   weight
   parent_weight
+  prob_conv  # Photon conversion probability at last level crossing, -1: parent
+  prob_conv0 # Photon conversion probability at level crossing wherein the
+             # current particle species was produced, -1: parent
   xc # Level crossings
   yc
   zc
@@ -161,8 +164,10 @@ end
 # Constructor
 node(x0=0.,y0=0.,z0=0.,kx0=0.,ky0=0.,kz0=0.,t0=0.,Δω0=-1.0,
      species0="axion",prob0=0.,
-     weight0=0.,parent_weight0=0.) = node(x0,y0,z0,kx0,ky0,kz0,t0,Δω0,species0,
-      prob0,weight0,parent_weight0,[],[],[],[],[],[],[],[],[],false,[],[],[])
+     weight0=0.,parent_weight0=0.,prob_conv=0.,prob_conv0=0.) = node(
+      x0,y0,z0,kx0,ky0,kz0,t0,Δω0,species0,
+      prob0,weight0,parent_weight0,prob_conv,prob_conv0,
+      [],[],[],[],[],[],[],[],[],false,[],[],[])
 #node(x=0.,y=0.,z=0.,kx=0.,ky=0.,kz=0.,t=0.,species="axion",prob=0.,weight=0.,
 #     parent_weight=0.,xc=[],yc=[],zc=[],kxc=[],kyc=[],kzc=[],tc=[],Pc=[],
 #    is_final=false,traj=[],mom=[]) = node(x,y,z,kx,ky,kz,t,species,prob,weight,
