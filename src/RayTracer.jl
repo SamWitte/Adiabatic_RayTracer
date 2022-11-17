@@ -547,7 +547,7 @@ function hamiltonian_axion(x, k,  time0, erg, θm, ωPul, B0, rNS,
 end
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-function k_norm_Cart(x0, khat, time0, erg, θm, ωPul, B0, rNS, Mass_NS, Mass_a; melrose=false, flat=false, isotropic=false)
+function k_norm_Cart(x0, khat, time0, erg, θm, ωPul, B0, rNS, Mass_NS, Mass_a; melrose=false, flat=false, isotropic=false, ax_fix=true)
     
     
     # Switch to polar coordinates
@@ -570,9 +570,13 @@ function k_norm_Cart(x0, khat, time0, erg, θm, ωPul, B0, rNS, Mass_NS, Mass_a;
     
     omP = GJ_Model_ωp_vecSPH(x0_pl, time0, θm, ωPul, B0, rNS);
     g_tt, g_rr, g_thth, g_pp = g_schwartz(x0_pl, Mass_NS);
-        
-    NrmSq = (-erg.^2 .* g_tt .- Mass_a.^2) ./ (w0_pl[:, 1].^2 .* g_rr .+  w0_pl[:, 2].^2 .* g_thth .+ w0_pl[:, 3].^2 .* g_pp )
     
+    if ax_fix
+        NrmSq = (-erg.^2 .* g_tt .- Mass_a.^2) ./ (w0_pl[:, 1].^2 .* g_rr .+  w0_pl[:, 2].^2 .* g_thth .+ w0_pl[:, 3].^2 .* g_pp )
+    else
+        kpar = K_par(x0_pl, w0_pl, [θm, ωPul, B0, rNS, time0, Mass_NS]; flat=flat)
+        NrmSq = (-erg.^2 .* g_tt .- omP.^2) ./ (w0_pl[:, 1].^2 .* g_rr .+  w0_pl[:, 2].^2 .* g_thth .+ w0_pl[:, 3].^2 .* g_pp .- omP.^2 ./ (-erg.^2 .* g_tt) .* kpar.^2 )
+    end
           
     return sqrt.(NrmSq) .* khat
     
@@ -872,7 +876,7 @@ function spatial_dot(vec1, vec2, ntrajs, x0_pl, Mass_NS)
     return out_v
 end
 
-function k_sphere(x0, k0, θm, ωPul, B0, rNS, time0, Mass_NS, Mass_a, erg_inf, flat)
+function k_sphere(x0, k0, θm, ωPul, B0, rNS, time0, Mass_NS, flat; zeroIn=true)
     if flat
         Mass_NS = 0.0;
     end
@@ -885,7 +889,7 @@ function k_sphere(x0, k0, θm, ωPul, B0, rNS, time0, Mass_NS, Mass_a, erg_inf, 
     # r theta phi
     x0_pl = [rr acos.(x0[:,3] ./ rr) atan.(x0[:,2], x0[:,1])]
     
-    omP = GJ_Model_ωp_vecSPH(x0_pl, time0, θm, ωPul, B0, rNS, zeroIn=true);
+    omP = GJ_Model_ωp_vecSPH(x0_pl, time0, θm, ωPul, B0, rNS, zeroIn=zeroIn);
     
     # vr, vtheta, vphi --- Define lower momenta and upper indx pos
     # [unitless, unitless, unitless ]
@@ -895,11 +899,9 @@ function k_sphere(x0, k0, θm, ωPul, B0, rNS, time0, Mass_NS, Mass_a, erg_inf, 
     
     # Switch to celerity in polar coordinates
     AA = (1.0 .- r_s0 ./ rr)
-    g_tt, g_rr, g_thth, g_pp = g_schwartz(x0_pl, Mass_NS)
-    w0_pl = [v0_pl[:,1] ./ sqrt.(AA)   v0_pl[:,2] ./ rr .* rr.^2  v0_pl[:,3] ./ (rr .* sin.(x0_pl[:,2])) .* (rr .* sin.(x0_pl[:,2])).^2 ] ./ AA # lower index defined, [eV, eV * km, eV * km]
-    NrmSq = (-erg_inf.^2 .* g_tt .- Mass_a.^2) ./ (w0_pl[:, 1].^2 .* g_rr .+  w0_pl[:, 2].^2 .* g_thth .+ w0_pl[:, 3].^2 .* g_pp )
     
-    return sqrt.(NrmSq) .* w0_pl
+    w0_pl = [v0_pl[:,1] ./ sqrt.(AA)   v0_pl[:,2] ./ rr .* rr.^2  v0_pl[:,3] ./ (rr .* sin.(x0_pl[:,2])) .* (rr .* sin.(x0_pl[:,2])).^2 ] ./ AA # lower index defined, [eV, eV * km, eV * km]
+    return w0_pl
 end
 
 function angle_vg_sNorm(x0, k0, thetaB, Mvars; return_cos=true)
@@ -941,8 +943,13 @@ function K_par(x0_pl, k_sphere, Mvars; flat=false)
     Bsphere = GJ_Model_Sphereical(x0_pl, t_start, θm, ωPul, B0, rNS; Mass_NS=Mass_NS, flat=flat, sphericalX=true)
     
     g_tt, g_rr, g_thth, g_pp = g_schwartz(x0_pl, Mass_NS)
-    Bmag = sqrt.((g_rr .* Bsphere[:, 1].^2 .+ g_thth .* Bsphere[:, 2].^2 .+ g_pp .* Bsphere[:, 3].^2))
-    k_par = (g_rr .* k_sphere[:,1] .* Bsphere[:, 1] .+ g_thth .* k_sphere[:,2] .* Bsphere[:, 2] .+ g_pp .* k_sphere[:,3] .* Bsphere[:, 3])  ./ Bmag
+    if length(size(x0_pl)) > 1
+        Bmag = sqrt.((g_rr .* Bsphere[:, 1].^2 .+ g_thth .* Bsphere[:, 2].^2 .+ g_pp .* Bsphere[:, 3].^2))
+        k_par = (g_rr .* k_sphere[:,1] .* Bsphere[:, 1] .+ g_thth .* k_sphere[:,2] .* Bsphere[:, 2] .+ g_pp .* k_sphere[:,3] .* Bsphere[:, 3])  ./ Bmag
+    else
+        Bmag = sqrt.((g_rr .* Bsphere[1].^2 .+ g_thth .* Bsphere[2].^2 .+ g_pp .* Bsphere[3].^2))
+        k_par = (g_rr .* k_sphere[1] .* Bsphere[1] .+ g_thth .* k_sphere[2] .* Bsphere[2] .+ g_pp .* k_sphere[3] .* Bsphere[3])  ./ Bmag
+    end
     return k_par
 end
 
@@ -1229,19 +1236,18 @@ function dwp_ds(xIn, ksphere, Mvars)
     
     # this is group velocity based on dwdk
     ωErg_inf = ωErg .* sqrt.(g_rr)
+    
     test = grad(omega_function(x0_pl, seed(ksphere), t_start, -ωErg_inf, θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=true)) #
     test[:, 1] ./= g_rr
     test[:, 2] ./= g_thth
     test[:, 3] ./= g_pp
     vgN = sqrt.(spatial_dot(test, test, ntrajs, x0_pl, Mass_NS));
     dwdk_snorm = acos.(spatial_dot(test ./ vgN, snorm, ntrajs, x0_pl, Mass_NS))
-    # print(cos.(dwdk_snorm), "\t", cos.(angleVal), "\t", stheta_B, "\n")
     
-
     if !isotropic
-        return abs.(w_prime), angleVal, kdotN, dwdk_snorm, test ./ vgN
+        return abs.(w_prime), angleVal, kdotN, dwdk_snorm, test ./ vgN, vgN
     else
-       return abs.(dz_op), angleVal, kdotN, dwdk_snorm, test ./ vgN
+       return abs.(dz_op), angleVal, kdotN, dwdk_snorm, test ./ vgN, vgN
     end
 end
 
@@ -1316,11 +1322,12 @@ function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_m
     tt_ax = LinRange(-2*maxR, 2*maxR, ntimes_ax); # Not a real physical time -- just used to get trajectory crossing
     cxing = nothing
     
-    # randomly sample angles θ, ϕ
+    # randomly sample angles θ, ϕ, hit conv surf
     θi = acos.(1.0 .- 2.0 .* rand(batchsize));
     ϕi = rand(batchsize) .* 2π;
     vvec_all = [sin.(θi) .* cos.(ϕi) sin.(θi) .* sin.(ϕi) cos.(θi)];
     
+    # local velocity
     θi_loc = acos.(1.0 .- 2.0 .* rand(batchsize));
     ϕi_loc = rand(batchsize) .* 2π;
     vvec_loc = [sin.(θi_loc) .* cos.(ϕi_loc) sin.(θi_loc) .* sin.(ϕi_loc) cos.(θi_loc)];
@@ -1338,6 +1345,7 @@ function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_m
     
     
     vIfty = (220.0 .+ rand(batchsize, 3) .* 1.0e-5) ./ sqrt.(3);
+    # vIfty = 220.0 .* erfinv.( 2.0 .* rand(batchsize, 3) .- 1.0);
     vIfty_mag = sqrt.(sum(vIfty.^2, dims=2));
     
     gammaA = 1 ./ sqrt.(1.0 .- (vIfty_mag ./ c_km).^2 )
@@ -1491,7 +1499,7 @@ function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_m
        
         for i in 1:ntrajs
             for j in 1:3
-                vIfty[i,j] = v_infinity(θ[i], ϕ[i], rmag[i], transpose(v0[i, :]); v_comp=j, Mass_NS=Mass_NS);
+                vIfty[i, j] = v_infinity(θ[i], ϕ[i], rmag[i], transpose(v0[i, :]); v_comp=j, Mass_NS=Mass_NS);
             end
         end
         
@@ -1531,7 +1539,7 @@ function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_m
                 
             else
                 xpos_proj = [transpose(xpos_flat[i,:]) .+ transpose(vvec_flat[i,:]) .* t_new_arr[:] for i in 1:ntrajs];
-                ## FIXING
+                
                 for i in 1:numX
                     valF, truth_vals, minV = test_on_shell(xpos_proj[i], vvec_loc[i,:], vIfty_mag[i], 0.0, θm, ωPul, B0, rNS, Mass_NS, Mass_a; iso=iso, melrose=melrose)
                     cxing_st = [get_crossings(valF, keep_all=true) for i in 1:batchsize];
@@ -1559,7 +1567,6 @@ function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_m
     end
     
 end
-
 
 
 

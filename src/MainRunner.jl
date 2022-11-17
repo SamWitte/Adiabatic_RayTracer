@@ -66,7 +66,7 @@ function get_Prob_nonAD(pos::Array, kpos::Array,
     x0_pl = [rmag theta_sf atan.(pos[:,2], pos[:,1])]
   
     Bsphere = RT.GJ_Model_Sphereical(pos, Nc, θm, ωPul, B0, rNS; Mass_NS=Mass_NS, flat=flat)
-    ksphere = RT.k_sphere(pos, kpos, θm, ωPul, B0, rNS, Nc, Mass_NS, Mass_a, erg_inf_ini, flat)
+    ksphere = RT.k_sphere(pos, kpos, θm, ωPul, B0, rNS, Nc, Mass_NS, flat)
     Bmag = sqrt.(RT.spatial_dot(Bsphere, Bsphere, Nc, x0_pl, Mass_NS)) .* 1.95e-2; # eV^2
     kmag = sqrt.(RT.spatial_dot(ksphere, ksphere, Nc, x0_pl, Mass_NS));
     ctheta_B = RT.spatial_dot(Bsphere, ksphere, Nc, x0_pl, Mass_NS) .* 1.95e-2 ./ (kmag .* Bmag)
@@ -78,7 +78,7 @@ function get_Prob_nonAD(pos::Array, kpos::Array,
         
     erg_ax = erg_inf_ini ./ sqrt.(1.0 .- 2 * GNew .* Mass_NS ./ rmag ./ c_km.^2 );
     Mvars =  [θm, ωPul, B0, rNS, [1.0, 1.0], Nc, Mass_NS, flat, isotropic, erg_ax]
-    sln_δw, angleVal = RT.dwp_ds(pos, ksphere, Mvars)
+    sln_δw, angleVal, k_dot_N, dwdk_snorm, vg_mu, vgN  = RT.dwp_ds(pos, ksphere, Mvars)
     conversion_F = sln_δw ./  (hbar .* c_km) # 1/km^2;
     
     extra_term = Mass_a.^5 ./ (kmag.^2 .+ Mass_a.^2 .* stheta_B.^2).^2
@@ -474,19 +474,20 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         # sample asymptotic velocity
         vIfty_mag = sqrt.(sum(vIfty.^2, dims=2));
         vel_eng = sum((vIfty ./ c_km).^ 2, dims = 2) ./ 2;
-        gammaA = 1 ./ sqrt.(1.0 .- (vIfty_mag ./ c_km).^2 )
-        erg_inf_ini = Mass_a .* sqrt.(1 .+ (vIfty_mag ./ c_km .* gammaA).^2)
+        gammaA = 1 ./ sqrt.(1.0 .- (vIfty_mag ).^2 )
+        erg_inf_ini = Mass_a .* sqrt.(1 .+ (vIfty_mag .* gammaA).^2)
         erg_ax = erg_inf_ini ./ sqrt.(1.0 .- 2 * GNew .* Mass_NS ./ rmag ./ c_km.^2 );
         
         
         # define initial momentum (magnitude)
         k_init = RT.k_norm_Cart(xpos_flat, velNorm_flat,  0.0, erg_inf_ini, θm,
                                 ωPul, B0, rNS, Mass_NS, Mass_a, melrose=melrose,
-                                isotropic=isotropic, flat=flat)
+                                isotropic=isotropic, flat=flat, ax_fix=true)
                                 
-        ksphere = RT.k_sphere(xpos_flat, k_init, θm, ωPul, B0, rNS, zeros(batchsize), Mass_NS, Mass_a, erg_inf_ini, flat)
+        ksphere = RT.k_sphere(xpos_flat, k_init, θm, ωPul, B0, rNS, zeros(batchsize), Mass_NS, flat)
         # sln_δw, angleVal = RT.dwp_ds(xpos_flat, ksphere, [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, flat, isotropic, erg_ax])
-        sln_δw, angleVal, k_dot_N, dwdk_snorm, vg_mu  = RT.dwp_ds(xpos_flat, ksphere,  [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, flat, isotropic, erg_ax])
+        Mvars =  [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, flat, isotropic, erg_ax]
+        sln_δw, angleVal, k_dot_N, dwdk_snorm, vg_mu, vgN  = RT.dwp_ds(xpos_flat, ksphere,  Mvars)
         calpha = cos.(angleVal)
         weight_angle = abs.(calpha)
         
