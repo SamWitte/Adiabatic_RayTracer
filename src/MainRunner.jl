@@ -540,8 +540,9 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
                 flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
                 num_cutoff=0, splittings_cutoff=100000, ax_num=ntimes)
-          nb = nb[1]
 
+          nb = nb[1] 
+          
           if saveMode > 1
             # Store event information
             write(f_event,
@@ -578,26 +579,35 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           nb.tc .-= nb.tc[end] # We define t=0 at the first conversion
           nb.tc .*= -1
 
+          samp_back_weight = nb.prob*nb.weight
+
+          #print(samp_back_weight, "\n") #DEBUG
+
           # Forward propagation of a photon from the last node
-          species = ["axion*" "photon"]
-          probs = [1 - nb.Pc[end], nb.Pc[end]]
+          #species = ["axion*" "photon"]
+          #probs = [1 - nb.Pc[end], nb.Pc[end]]
           count = 0 
-          for j in [1 2]
+          #for j in [1 2]
             # Remove comment to have a prob_cutoff for entire tree, and not
             # for each of the two subtrees
-            #if probs[j] > prob_cutoff # Skip if unlikely
-              if j == 1 # axion
-                parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
-                      -nb.kxc[end], -nb.kyc[end], -nb.kzc[end], nb.tc[end],
-                      nb.Δωc[end], species[j], probs[j], probs[j], 1.0,
-                      nb.Pc[end], -1.0)
-                                  # Original axion
-              else      # photon
-                parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
-                      -nb.kxc[end], -nb.kyc[end], -nb.kzc[end], nb.tc[end],
-                      nb.Δωc[end], species[j], probs[j], probs[j], 1.0,
-                      nb.Pc[end], nb.Pc[end])
-              end
+            ##if probs[j] > prob_cutoff # Skip if unlikely
+              #if j == 1 # axion
+              #  parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
+              #        -nb.kxc[end], -nb.kyc[end], -nb.kzc[end], nb.tc[end],
+              #        nb.Δωc[end], species[j], probs[j], probs[j], 1.0,
+              #        nb.Pc[end], -1.0)
+              #                    # Original axion
+              #else      # photon
+                #parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
+                #      -nb.kxc[end], -nb.kyc[end], -nb.kzc[end], nb.tc[end],
+                #      nb.Δωc[end], species[j], probs[j], probs[j], 1.0,
+                #      nb.Pc[end], nb.Pc[end] )
+                parent = RT.node( xpos_flat[i, 1], xpos_flat[i, 2],
+                                 xpos_flat[i, 3], k_init[i, 1], k_init[i, 2],
+                                 k_init[i, 3], 0,
+                                 -1.0, "photon", 1.0, 1.0,
+                                 -1.0, -1.0, -1.0 )
+              #end
               tree, c, info = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                   Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
                   flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
@@ -622,7 +632,10 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                   else
                     id = 1
                   end 
-                  
+                 
+                  # Re-weight axion with bracktraced weight
+                  tree[ii].weight *= samp_back_weight
+
                   # Save information
                   if saveMode > 1
                     write(f_final,
@@ -663,7 +676,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                 end
               end
             #end
-          end
+          #end j
 
           photon_trajs += 1
 
