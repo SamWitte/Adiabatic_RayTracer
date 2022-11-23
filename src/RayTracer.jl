@@ -215,9 +215,9 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     w0_pl = [v0_pl[:,1] ./ sqrt.(AA)   v0_pl[:,2] ./ rr .* rr.^2  v0_pl[:,3] ./ (rr .* sin.(x0_pl[:,2])) .* (rr .* sin.(x0_pl[:,2])).^2 ] ./ AA # lower index defined, [eV, eV * km, eV * km]
     
     
-    if !is_axion
-        val = hamiltonian(x0_pl, w0_pl, time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=isotropic, melrose=melrose) ./ (erg ./ sqrt.(AA)).^2
-        print(val, "\n\n")
+#    if !is_axion
+#        val = hamiltonian(x0_pl, w0_pl, time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=isotropic, melrose=melrose) ./ (erg ./ sqrt.(AA)).^2
+#        print(val, "\n\n")
     end
     
     g_tt, g_rr, g_thth, g_pp = g_schwartz(x0_pl, Mass_NS);
