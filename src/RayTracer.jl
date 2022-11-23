@@ -184,10 +184,10 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     
     if is_axion 
       θm,ωPul,B0,rNS,gammaF,time0,Mass_NS,erg,flat,isotropic,melrose,Mass_a=Mvars;
-      k0 = k_norm_Cart(x0, k0, time0, erg, θm, ωPul, B0, rNS, Mass_NS, Mass_a, melrose=melrose, flat=flat, isotropic=isotropic. is_photon=false)
+      k0 = k_norm_Cart(x0, k0, time0, erg, θm, ωPul, B0, rNS, Mass_NS, Mass_a, melrose=melrose, flat=flat, isotropic=isotropic, is_photon=false)
     else
       θm,ωPul,B0,rNS,gammaF,time0,Mass_NS,erg,flat,isotropic,melrose=Mvars;
-      k0 = k_norm_Cart(x0, k0, time0, erg, θm, ωPul, B0, rNS, Mass_NS, Mass_a, melrose=melrose, flat=flat, isotropic=isotropic. is_photon=true)
+      k0 = k_norm_Cart(x0, k0, time0, erg, θm, ωPul, B0, rNS, Mass_NS, Mass_a, melrose=melrose, flat=flat, isotropic=isotropic, is_photon=true)
     end
     if flat
         Mass_NS = 0.0;
