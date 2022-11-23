@@ -218,7 +218,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
 #    if !is_axion
 #        val = hamiltonian(x0_pl, w0_pl, time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=isotropic, melrose=melrose) ./ (erg ./ sqrt.(AA)).^2
 #        print(val, "\n\n")
-    end
+#    end
     
     g_tt, g_rr, g_thth, g_pp = g_schwartz(x0_pl, Mass_NS);
     # kpar = K_par(x0_pl, w0_pl, [θm, ωPul, B0, rNS, time0, Mass_NS])
