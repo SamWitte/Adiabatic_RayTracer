@@ -344,12 +344,13 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
         cbset = CallbackSet(cb, cb_s, cb_r)
       end
 
-      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], callback=cbset,
-                   userdata=Dict(:callback_count=>0, :max_count=>max_crossings))
+      # prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], callback=cbset, userdata=Dict(:callback_count=>0, :max_count=>max_crossings))
+      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars])
     else
     #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     # Define the ODEproblem
-      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], callback=cb)
+      # prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], callback=cb)
+      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars])
     end
 
 
@@ -1363,6 +1364,7 @@ function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_m
     
     vIfty = (220.0 .+ rand(batchsize, 3) .* 1.0e-5) ./ sqrt.(3);
     # vIfty = 220.0 .* erfinv.( 2.0 .* rand(batchsize, 3) .- 1.0);
+    
     vIfty_mag = sqrt.(sum(vIfty.^2, dims=2));
     
     gammaA = 1 ./ sqrt.(1.0 .- (vIfty_mag ./ c_km).^2 )
@@ -1433,6 +1435,7 @@ function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_m
         else
             for i in 1:numX
                 valF, truth_vals, minV = test_on_shell(xpos_proj[i], vvec_loc[i,:], vIfty_mag[i], 0.0, θm, ωPul, B0, rNS, Mass_NS, Mass_a; iso=iso, melrose=melrose)
+                # print("min V: \t", minV, "\n")
                 cxing_st = [get_crossings(valF, keep_all=true) for i in 1:batchsize];
                 tt_axNew = t_new_arr[truth_vals]
                 if isnothing(cxing)
@@ -1556,7 +1559,7 @@ function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_m
                 
             else
                 xpos_proj = [transpose(xpos_flat[i,:]) .+ transpose(vvec_flat[i,:]) .* t_new_arr[:] for i in 1:ntrajs];
-                
+                ## FIXING
                 for i in 1:numX
                     valF, truth_vals, minV = test_on_shell(xpos_proj[i], vvec_loc[i,:], vIfty_mag[i], 0.0, θm, ωPul, B0, rNS, Mass_NS, Mass_a; iso=iso, melrose=melrose)
                     cxing_st = [get_crossings(valF, keep_all=true) for i in 1:batchsize];
@@ -1584,7 +1587,6 @@ function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_m
     end
     
 end
-
 
 
 
