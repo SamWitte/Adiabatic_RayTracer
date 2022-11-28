@@ -418,12 +418,13 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         
         # First part of code here is just written to generate evenly spaced
         # samples of conversion surface
+        # Random.seed!(iseed)
         while !filled_positions
             xv, Rv, numV, weights, vvec_in, vIfty_in = RT.find_samples(maxR,
                       ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS;
                       n_max=n_maxSample, batchsize=small_batch,
                       thick_surface=thick_surface, iso=isotropic, melrose=false)
-            f_inx += 2
+            f_inx += small_batch
             
             if numV == 0
                 continue
@@ -450,7 +451,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
             end
         end
         filled_positions = false;
-
+        
         # vIfty = erfinv.(2 .* rand(batchsize, 3) .- 1.0) .* vmean_ax .+ v_NS#km/s
         rmag = sqrt.(sum(xpos_flat.^ 2, dims=2));
         vmag = sqrt.(2 * GNew .* Mass_NS ./ rmag) ; # km/s

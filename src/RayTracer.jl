@@ -12,8 +12,6 @@ using OrdinaryDiffEq
 using LSODA
 using DiffEqBase
 using SpecialFunctions
-# using DifferentialEquations
-# using CuArrays
 using LinearAlgebra: cross, det
 using NLsolve
 
@@ -1120,7 +1118,7 @@ function Find_Conversion_Surface(Ax_mass, t_in, θm, ω, B0, rNS, gammaL, relati
     om_test = GJ_Model_ωp_scalar(rNS .* [sin.(θmEV) 0.0 cos.(θmEV)], t_in, θm, ω, B0, rNS);
     rc_guess = rNS .* (om_test ./ Ax_mass) .^ (2.0 ./ 3.0);
     
-    return rc_guess .* 1.1 # add a bit just for buffer
+    return rc_guess .* 1.01 # add a bit just for buffer
 end
 
 
@@ -1361,12 +1359,10 @@ function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_m
     x0_all= [x1 .* cos.(-ϕi) .* cos.(-θi) .+ x2 .* sin.(-ϕi) x2 .* cos.(-ϕi) .- x1 .* sin.(-ϕi) .* cos.(-θi) x1 .* sin.(-θi)];
     x_axion = [transpose(x0_all[i,:]) .+ transpose(vvec_all[i,:]) .* tt_ax[:] for i in 1:batchsize];
     
-    
     vIfty = (220.0 .+ rand(batchsize, 3) .* 1.0e-5) ./ sqrt.(3);
     # vIfty = 220.0 .* erfinv.( 2.0 .* rand(batchsize, 3) .- 1.0);
     
     vIfty_mag = sqrt.(sum(vIfty.^2, dims=2));
-    
     gammaA = 1 ./ sqrt.(1.0 .- (vIfty_mag ./ c_km).^2 )
     erg_inf_ini = Mass_a .* sqrt.(1 .+ (vIfty_mag ./ c_km .* gammaA).^2)
     Mass_NS = 1.0
@@ -1413,7 +1409,7 @@ function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_m
     numX = length(cxing_short);
     R_sample = vcat([rRND[indx_cx_cut][i] for i in 1:numX]...);
     erg_inf_ini = vcat([erg_inf_ini[indx_cx_cut][i] for i in 1:numX]...);
-    
+
     
     vvec_loc = vvec_loc[indx_cx_cut, :];
     vIfty_mag = vcat([vIfty_mag[indx_cx_cut][i] for i in 1:numX]...);

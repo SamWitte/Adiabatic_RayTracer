@@ -156,15 +156,15 @@ CLen_Scale = false # if true, perform cut due to de-phasing
 cutT = 10000; # keep highest weight 'cutT' each batch
 fix_time = 0.0; # eval at fixed time = 0?
 ode_err = 1e-6; # need strong error
-ntimes = 100 # how many points on photon traj to keep
+ntimes = 3 # how many points on photon traj to keep
 flat = false; # flat space or schwartzchild
 isotropic = true; # default is anisotropic
 melrose = true; # keep true, more efficient
-ntimes_ax = 500; # vector scan for resonance
+ntimes_ax = 10000; # vector scan for resonance
 vmean_ax = 220.0
 dir_tag = "results"
 rho_DM = 0.3
-thick_surface=true
+thick_surface=false
 n_maxSample=6
 
 print("Axion parameters: ", Mass_a, "\n", Ax_g, "\n")
