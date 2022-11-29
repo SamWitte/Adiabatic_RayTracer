@@ -357,7 +357,6 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
             max_iters=1e5, force_dtmin=true,
             dtmin=1e-13, dtmax=1e-2)
 
-    
 
     for i in 1:length(sol.u)
         sol.u[i][:,4:6] .*= erg
@@ -367,14 +366,12 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     r = [sol.u[i][1] for i in 1:length(sol.u)]
     Mass_NS = Mass_NS*ones(length(r), length(sol.u))
     for i in 1:length(sol.u)
-      Mass_NS[r .< rNS, i] .= r[r .< rNS].^3/rNS^3
+      Mass_NS[r .< rNS, i] .*= r[r .< rNS].^3/rNS^3
     end
     
     # Define the Schwarzschild radii (in km)
     r_s = 2.0 .* ones(length(sol.u[1][:,1]), length(sol.u)) .* Mass_NS .* GNew ./ c_km^2
     ω = [(1.0 .- r_s[i] ./ sol.u[i][:,1]) for i in 1:length(sol.u)]
-
-
 
 
 

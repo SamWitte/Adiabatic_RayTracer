@@ -327,7 +327,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     Ntajs, gammaF; flat=true, isotropic=false, melrose=false,
     thick_surface=true,
     ode_err=1e-6, cutT=100000, fix_time=0.0, CLen_Scale=true, file_tag="",
-    ntimes=1000, v_NS=[0 0 0], rho_DM=0.3, vmean_ax=220.0, saveMode=0,
+    ntimes=1000, v_NS=[0 0 0], rho_DM=0.45, vmean_ax=220.0, saveMode=0,
     ntimes_ax=1000, dir_tag="results", n_maxSample=6, iseed=-1,
     num_cutoff=5,
     MC_nodes=5, max_nodes=50,
@@ -414,11 +414,12 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     small_batch = 2
     
     tot_count = 0
+    # Random.seed!(iseed)
     while photon_trajs < desired_trajs
         
         # First part of code here is just written to generate evenly spaced
         # samples of conversion surface
-        # Random.seed!(iseed)
+        
         while !filled_positions
             xv, Rv, numV, weights, vvec_in, vIfty_in = RT.find_samples(maxR,
                       ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS;
@@ -456,6 +457,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         rmag = sqrt.(sum(xpos_flat.^ 2, dims=2));
         vmag = sqrt.(2 * GNew .* Mass_NS ./ rmag) ; # km/s
 
+        # print(xpos_flat, "\n", velNorm_flat, "\n\n")
         
         jacVs = zeros(length(rmag))
         
@@ -510,7 +512,9 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         phaseS = dense_extra .* (2 .* π .* maxR.^2) .* (rho_DM .* 1e9)  ./ Mass_a .* jacobian_GR
         sln_prob = abs.(k_dot_N) .* phaseS .* (1e5 .^ 2) .* c_km .* 1e5 .*
                    mcmc_weights # axions in per second
-
+        # print(sln_prob, "\t", abs.(k_dot_N), "\t", maxR, "\t", jacobian_GR, "\t", dense_extra,  "\n")
+        # print(rho_DM, "\t", Mass_a, "\t", mcmc_weights, "\n")
+        
         for i in 1:batchsize
 
           #print("NEW EVENT: ", photon_trajs, "\n") # DEBUG
@@ -666,6 +670,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                     #      tree[ii].prob_conv, " ",
                     #      tree[ii].prob_conv0, "\n") # DEBUG
                   else
+                    # print(θfX, "\t", ϕfX, "\n")
                     row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1]]
                   end
                   if isnothing(saveAll)

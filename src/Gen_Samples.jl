@@ -163,7 +163,7 @@ melrose = true; # keep true, more efficient
 ntimes_ax = 10000; # vector scan for resonance
 vmean_ax = 220.0
 dir_tag = "results"
-rho_DM = 0.3
+rho_DM = 0.45
 thick_surface=false
 n_maxSample=6
 
