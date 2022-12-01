@@ -342,13 +342,13 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
         cbset = CallbackSet(cb, cb_s, cb_r)
       end
 
-      # prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], callback=cbset, userdata=Dict(:callback_count=>0, :max_count=>max_crossings))
-      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars])
+      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], callback=cbset, userdata=Dict(:callback_count=>0, :max_count=>max_crossings))
+      # prob = ODEProblem(rhs, u0, tspan, [ω, Mvars])
     else
     #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     # Define the ODEproblem
-      # prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], callback=cb)
-      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars])
+      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], callback=cb)
+      # prob = ODEProblem(rhs, u0, tspan, [ω, Mvars])
     end
 
 
