@@ -103,7 +103,7 @@ end
 
 function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,flat,isotropic,melrose,
-    NumerPass; num_cutoff=5, prob_cutoff=1e-10,splittings_cutoff=-1,
+    NumerPass; splittings_cutoff=-1,
     ax_num=100, MC_nodes=5, max_nodes=50)
 
   # Initial conversion probability
@@ -123,7 +123,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   # Note: turned of to make bound orbits more likely
   # tot_prob = 1 - first.prob
 
-  count = -1
+  count = 0
   count_main = 0
   info = 1
  
@@ -175,7 +175,9 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
         # Since we are considering the most probable first
         count_main += 1
         tot_prob += event.weight
-        event.is_final = true
+        if sum(pos[end, :].^2)^.5 > rNS*1.1
+          event.is_final = true
+        end
     else
 
       ##########################################################################
@@ -251,7 +253,6 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
         # This event is taking too long! We transition to a pure MC
         if count > MC_nodes
           r = rand(Float64)
-          #print("MC: ", r, " ", Prob[1], "\n")
           if r < Prob[1] # New particle
             push!(events, RT.node(xc[1], yc[1], zc[1], kxc[1], kyc[1], kzc[1],
                tc[1], Δωc[1], new_species, Prob[1], event.weight, event.weight,
@@ -292,18 +293,9 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     # Add to tree
     push!(tree, event)
 
-    if tot_prob >= 1 - prob_cutoff
-      info = 2
+    if splittings_cutoff > 0
       break
     end
-    if num_cutoff <= 0 && splittings_cutoff > 0
-      break
-    end
-    if count_main >= num_cutoff
-      info = 3
-      break
-    end
-
     if count > max_nodes
       info = 4
       break
@@ -329,9 +321,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     ode_err=1e-6, cutT=100000, fix_time=0.0, CLen_Scale=true, file_tag="",
     ntimes=1000, v_NS=[0 0 0], rho_DM=0.45, vmean_ax=220.0, saveMode=0,
     ntimes_ax=1000, dir_tag="results", n_maxSample=6, iseed=-1,
-    num_cutoff=5,
-    MC_nodes=5, max_nodes=50,
-    prob_cutoff=1e-10)
+    MC_nodes=5, max_nodes=50)
 
     if iseed < 0
       iseed = rand(0:1000000)
@@ -435,14 +425,12 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
             for i in 1:Int(numV) # Keep more?
                 f_inx -= 1
                 if fill_indx <= batchsize
-            
                     xpos_flat[fill_indx, :] .= xv[i, :];
                     R_sample[fill_indx] = Rv[i];
                     mcmc_weights[fill_indx] = n_maxSample;
                     velNorm_flat[fill_indx, :] .= vvec_in[i, :];
                     vIfty[fill_indx, :] .= vIfty_in[i, :];
                     fill_indx += 1
-                    
                 end
             end
             
@@ -517,8 +505,6 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         
         for i in 1:batchsize
 
-          #print("NEW EVENT: ", photon_trajs, "\n") # DEBUG
-          
           time0=time()
 
           if saveMode > 1
@@ -543,8 +529,8 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           # The simplest is always the best: make use of existing code
           nb, _, _ = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
-                flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
-                num_cutoff=0, splittings_cutoff=100000, ax_num=ntimes)
+                flat,isotropic,melrose,NumerPass;
+                splittings_cutoff=100000, ax_num=ntimes)
 
           nb = nb[1] 
           
@@ -585,107 +571,83 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           nb.tc .*= -1
 
           samp_back_weight = nb.prob*nb.weight
-
-          #print(samp_back_weight, "\n") #DEBUG
-
+          
           # Forward propagation of a photon from the last node
-          #species = ["axion*" "photon"]
-          #probs = [1 - nb.Pc[end], nb.Pc[end]]
           count = 0 
-          #for j in [1 2]
-            # Remove comment to have a prob_cutoff for entire tree, and not
-            # for each of the two subtrees
-            ##if probs[j] > prob_cutoff # Skip if unlikely
-              #if j == 1 # axion
-              #  parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
-              #        -nb.kxc[end], -nb.kyc[end], -nb.kzc[end], nb.tc[end],
-              #        nb.Δωc[end], species[j], probs[j], probs[j], 1.0,
-              #        nb.Pc[end], -1.0)
-              #                    # Original axion
-              #else      # photon
-                #parent = RT.node( nb.xc[end],   nb.yc[end],   nb.zc[end],
-                #      -nb.kxc[end], -nb.kyc[end], -nb.kzc[end], nb.tc[end],
-                #      nb.Δωc[end], species[j], probs[j], probs[j], 1.0,
-                #      nb.Pc[end], nb.Pc[end] )
-                parent = RT.node( xpos_flat[i, 1], xpos_flat[i, 2],
-                                 xpos_flat[i, 3], k_init[i, 1], k_init[i, 2],
-                                 k_init[i, 3], 0,
-                                 -1.0, "photon", 1.0, 1.0,
-                                 -1.0, -1.0, -1.0 )
-              #end
-              tree, c, info = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
-                  Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
-                  flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
-                  num_cutoff=num_cutoff,ax_num=ntimes,MC_nodes=MC_nodes,
-                  max_nodes=max_nodes)
-              count += c
-              
-              tot_count += length(tree)
-              
-              # Store results
-              for ii in 1:length(tree)
-                if saveMode>2 saveNode(f, tree[ii]) end
-                if tree[ii].is_final
-                  absf  = sqrt(sum(tree[ii].mom[end,:].^2))
-                  absfX = sqrt(sum(tree[ii].traj[end,:].^2))
-                  ϕf  = atan(tree[ii].mom[end,2], tree[ii].mom[end,1])
-                  ϕfX = atan(tree[ii].traj[end,2], tree[ii].traj[end,1])
-                  θf  = acos(tree[ii].mom[end,3]/absf)
-                  θfX = acos(tree[ii].traj[end,3]/absfX)
-                  if tree[ii].species == "axion*" || tree[ii].species == "axion"
-                    id = 0
-                  else
-                    id = 1
-                  end 
-                 
-                  # Re-weight axion with bracktraced weight
-                  tree[ii].weight *= samp_back_weight
+          parent = RT.node( xpos_flat[i, 1], xpos_flat[i, 2],
+                             xpos_flat[i, 3], k_init[i, 1], k_init[i, 2],
+                             k_init[i, 3], 0,
+                             -1.0, "photon", 1.0, 1.0,
+                             -1.0, -1.0, -1.0 )
+          tree, c, info = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
+              Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
+              flat,isotropic,melrose,NumerPass;
+              ax_num=ntimes,MC_nodes=MC_nodes,
+              max_nodes=max_nodes)
+          count += c
+          
+          tot_count += length(tree)
+          
+          # Store results
+          for ii in 1:length(tree)
+            if saveMode>2 saveNode(f, tree[ii]) end
+            if tree[ii].is_final
+              absf  = sqrt(sum(tree[ii].mom[end,:].^2))
+              absfX = sqrt(sum(tree[ii].traj[end,:].^2))
+              ϕf  = atan(tree[ii].mom[end,2], tree[ii].mom[end,1])
+              ϕfX = atan(tree[ii].traj[end,2], tree[ii].traj[end,1])
+              θf  = acos(tree[ii].mom[end,3]/absf)
+              θfX = acos(tree[ii].traj[end,3]/absfX)
 
-                  # Save information
-                  if saveMode > 1
-                    write(f_final,
-                        string(photon_trajs),     " ", # Event number
-                        string(tree[ii].weight),  " ", # Final weight
-                        string(id),  " ", # Species
-                        string(θf),  " ", string(ϕf),  " ",
-                            string(absf),  " ", # Final momentum
-                        string(θfX), " ", string(ϕfX), " ",
-                          string(absfX), " ", # Final position
-                        string(tree[ii].t), # Time (at final crossing)
-                        "\n"
-                       )
-                  end
-                  # ---
-                  # See TODOs
-                  opticalDepth = 0
-                  weightC = 1
-                  # ---
-                  weight_tmp = tree[ii].weight * (
-                                          weightC^2 * exp.(-opticalDepth) )
-                  Δω = tree[ii].erg[end] ./ Mass_a .+ vel_eng[:] # Energy change
+              if tree[ii].species == "axion*" || tree[ii].species == "axion"
+                id = 0
+              else
+                id = 1
+              end 
+             
+              # Re-weight axion with bracktraced weight
+              tree[ii].weight *= samp_back_weight
 
-                  if id == 1
-                      f_inx += 1
-                  end
-                  if saveMode > 0 # Save more
-                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1] tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1] c info tree[ii].prob tree[ii].prob_conv tree[ii].prob_conv0]
-
-                  else
-                    # print(θfX, "\t", ϕfX, "\n")
-
-                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1]]
-                  end
-                  if isnothing(saveAll)
-                    saveAll = row
-                  else
-                    saveAll = [saveAll; row]
-                  end
-                
-                end
+              # Save information
+              if saveMode > 1
+                write(f_final,
+                    string(photon_trajs),     " ", # Event number
+                    string(tree[ii].weight),  " ", # Final weight
+                    string(id),  " ", # Species
+                    string(θf),  " ", string(ϕf),  " ",
+                        string(absf),  " ", # Final momentum
+                    string(θfX), " ", string(ϕfX), " ",
+                      string(absfX), " ", # Final position
+                    string(tree[ii].t), # Time (at final crossing)
+                    "\n"
+                   )
               end
-            #end
-          #end j
+              # ---
+              # See TODOs
+              opticalDepth = 0
+              weightC = 1
+              # ---
+              weight_tmp = tree[ii].weight * (
+                                      weightC^2 * exp.(-opticalDepth) )
+              Δω = tree[ii].erg[end] ./ Mass_a .+ vel_eng[:] # Energy change
 
+              if id == 1
+                  f_inx += 1
+              end
+              if saveMode > 0 # Save more
+                row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1] tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1] c info tree[ii].prob tree[ii].prob_conv tree[ii].prob_conv0]
+              else
+                row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1]]
+              end
+              if isnothing(saveAll)
+                saveAll = row
+              else
+                saveAll = [saveAll; row]
+              end
+            
+            end
+          end
+         
           photon_trajs += 1
 
           if saveMode > 2 close(f) end
@@ -697,7 +659,6 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           end
 
         end # Batchsize, in any case 1...
-
     end # while
     
     saveAll[:, 8] ./= float(f_inx) # divide off by N trajectories sampled
@@ -707,7 +668,6 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     fileN *= "_Ax_trajs_"*string(Ntajs)
     fileN *= "_N_Times_"*string(ntimes);
     #fileN *= "_N_maxSample_"*string(n_maxSample)
-    fileN *= "_num_cutoff_"*string(num_cutoff)
     fileN *= "_MC_nodes_"*string(MC_nodes)
     fileN *= "_max_nodes_"*string(max_nodes)
     # fileN *= "_iseed_"*string(iseed)
