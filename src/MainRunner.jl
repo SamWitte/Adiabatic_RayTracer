@@ -123,7 +123,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   # Note: turned of to make bound orbits more likely
   # tot_prob = 1 - first.prob
 
-  count = -1
+  count = 0
   count_main = 0
   info = 1
  
@@ -175,7 +175,10 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
         # Since we are considering the most probable first
         count_main += 1
         tot_prob += event.weight
-        event.is_final = true
+        # It is "final" if it is not killed by the NS
+        if sum(pos[end, :].^2)^.5 > rNS*1.1
+          event.is_final = true
+        end
     else
 
       ##########################################################################
