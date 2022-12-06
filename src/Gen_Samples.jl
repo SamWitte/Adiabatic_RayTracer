@@ -91,21 +91,6 @@ function parse_commandline()
                    " 3: Save entire tree"
             arg_type = Int
             default = 0
-        "--probCutoff"
-            help = "Stop the generation of the tree when the total "           *
-                   "probability/weight of all outgoing particles has reached " *
-                   "'prob_cutoff'. The final error will be <= prob_cutoff. "   *
-                   "This should be equal to the final uncertainty we want to " *
-                   "achieve."
-            arg_type = Float64
-            default = 1e-10
-        "--numCutoff"
-            help = "Stops when num_cutoff outgoing particles has been found. " *
-                   "This should be as large as possible. It can be used to "   *
-                   "cut off some large trees. The final error will be "        *
-                   "smaller than 2^-num_cutoff."
-            arg_type = Int
-            default = 5
         "--MCNodes"
             help = "The number of total subbrances to compute before the "     *
                    "generation of the tree is transitioned to a 'pure' MC "    *
@@ -143,8 +128,6 @@ file_tag = parsed_args["ftag"]
 vNS = [parsed_args["vNS_x"] parsed_args["vNS_y"] parsed_args["vNS_z"]]
 # --- Tree parameters ---
 saveMode = parsed_args["saveMode"]
-num_cutoff = parsed_args["numCutoff"]
-prob_cutoff = parsed_args["probCutoff"]
 MC_nodes = parsed_args["MCNodes"]
 max_nodes = parsed_args["maxNodes"]
 seed = parsed_args["seed"]
@@ -180,13 +163,13 @@ if parsed_args["run_RT"] == 1
               file_tag=file_tag, ntimes=ntimes, v_NS=vNS, rho_DM=rho_DM,
               ntimes_ax=ntimes_ax, vmean_ax=vmean_ax, dir_tag=dir_tag,
               n_maxSample=n_maxSample,
-              saveMode=saveMode, num_cutoff=num_cutoff,
-              prob_cutoff=prob_cutoff, iseed=seed, MC_nodes=MC_nodes,
+              saveMode=saveMode,
+              iseed=seed, MC_nodes=MC_nodes,
               max_nodes=max_nodes)
 end
 
 
-function combine_files(Mass_a, Ax_g, θm, ωPul, B0, Ntajs, Nruns, ode_err, fix_time, file_tag, ntimes, v_NS, dir_tag, num_cutoff, MC_nodes, max_nodes)
+function combine_files(Mass_a, Ax_g, θm, ωPul, B0, Ntajs, Nruns, ode_err, fix_time, file_tag, ntimes, v_NS, dir_tag, MC_nodes, max_nodes)
    
     fileL = String[];
     
@@ -197,7 +180,6 @@ function combine_files(Mass_a, Ax_g, θm, ωPul, B0, Ntajs, Nruns, ode_err, fix_
         fileN *="_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0)
         fileN *= "_Ax_trajs_"*string(Ntajs)
         fileN *= "_N_Times_"*string(ntimes);
-        fileN *= "_num_cutoff_"*string(num_cutoff)
         fileN *= "_MC_nodes_"*string(MC_nodes)
         fileN *= "_max_nodes_"*string(max_nodes)
         fileN *= "_"*file_tag*string(i)*".npy"
@@ -219,7 +201,6 @@ function combine_files(Mass_a, Ax_g, θm, ωPul, B0, Ntajs, Nruns, ode_err, fix_
     fileN *="_ThetaM_"*string(θm)*"_rotPulsar_"*string(ωPul)*"_B0_"*string(B0)
     fileN *= "_Ax_trajs_"*string(Ntajs * Nruns)
     fileN *= "_N_Times_"*string(ntimes);
-    fileN *= "_num_cutoff_"*string(num_cutoff)
     fileN *= "_MC_nodes_"*string(MC_nodes)
     fileN *= "_max_nodes_"*string(max_nodes)
     fileN *= "_"*file_tag*".npy"
@@ -234,7 +215,7 @@ end
 
 
 if parsed_args["run_Combine"] == 1
-    combine_files(Mass_a, Ax_g, θm, ωPul, B0, Ntajs, parsed_args["side_runs"], ode_err, fix_time, file_tag, ntimes, vNS, dir_tag, num_cutoff, MC_nodes, max_nodes);
+    combine_files(Mass_a, Ax_g, θm, ωPul, B0, Ntajs, parsed_args["side_runs"], ode_err, fix_time, file_tag, ntimes, vNS, dir_tag, MC_nodes, max_nodes);
 end
 
 
