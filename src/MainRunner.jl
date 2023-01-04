@@ -58,7 +58,7 @@ function saveNode(f, n)
 end
 
 function get_Prob_nonAD(pos::Array, kpos::Array,
-    Mass_a,Ax_g,θm,ωPul,B0,rNS,erg_inf_ini,vIfty_mag,flat,isotropic)
+    Mass_a,Ax_g,θm,ωPul,B0,rNS,erg_inf_ini,vIfty_mag,flat,isotropic, bndry_lyr)
 
     Nc = length(pos[:, 1])
     rmag = sqrt.(sum(pos.^ 2, dims=2));
@@ -66,7 +66,7 @@ function get_Prob_nonAD(pos::Array, kpos::Array,
     x0_pl = [rmag theta_sf atan.(pos[:,2], pos[:,1])]
   
     Bsphere = RT.GJ_Model_Sphereical(pos, Nc, θm, ωPul, B0, rNS; Mass_NS=Mass_NS, flat=flat)
-    ksphere = RT.k_sphere(pos, kpos, θm, ωPul, B0, rNS, Nc, Mass_NS, flat)
+    ksphere = RT.k_sphere(pos, kpos, θm, ωPul, B0, rNS, Nc, Mass_NS, flat, bndry_lyr=bndry_lyr)
     Bmag = sqrt.(RT.spatial_dot(Bsphere, Bsphere, Nc, x0_pl, Mass_NS)) .* 1.95e-2; # eV^2
     kmag = sqrt.(RT.spatial_dot(ksphere, ksphere, Nc, x0_pl, Mass_NS));
     ctheta_B = RT.spatial_dot(Bsphere, ksphere, Nc, x0_pl, Mass_NS) .* 1.95e-2 ./ (kmag .* Bmag)
@@ -77,7 +77,7 @@ function get_Prob_nonAD(pos::Array, kpos::Array,
     end
         
     erg_ax = erg_inf_ini ./ sqrt.(1.0 .- 2 * GNew .* Mass_NS ./ rmag ./ c_km.^2 );
-    Mvars =  [θm, ωPul, B0, rNS, [1.0, 1.0], Nc, Mass_NS, flat, isotropic, erg_ax]
+    Mvars =  [θm, ωPul, B0, rNS, [1.0, 1.0], Nc, Mass_NS, flat, isotropic, erg_ax, bndry_lyr]
     sln_δw, angleVal, k_dot_N, dwdk_snorm, vg_mu, vgN  = RT.dwp_ds(pos, ksphere, Mvars)
     conversion_F = sln_δw ./  (hbar .* c_km) # 1/km^2;
     
@@ -102,7 +102,7 @@ function get_Prob_nonAD(pos::Array, kpos::Array,
 end
 
 function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
-    Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,flat,isotropic,melrose,
+    Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,flat,isotropic,melrose,bndry_lyr,
     NumerPass; num_cutoff=5, prob_cutoff=1e-10,splittings_cutoff=-1,
     ax_num=100, MC_nodes=5, max_nodes=50)
 
@@ -110,7 +110,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   pos = [first.x first.y first.z]
   kpos = [first.kx first.ky first.kz]
   Prob_nonAD = get_Prob_nonAD(pos,kpos,Mass_a,Ax_g,θm,ωPul,B0,rNS,
-                      erg_inf_ini .* abs.(first.Δω), vIfty_mag, flat, isotropic)
+                      erg_inf_ini .* abs.(first.Δω), vIfty_mag, flat, isotropic, bndry_lyr)
   Prob = 1 .- exp.(-Prob_nonAD)
   first.prob = Prob[1]
 
@@ -151,18 +151,18 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     # propagate photon or axion
     if event.species == "photon"
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
-               [erg_inf_ini], flat, isotropic, melrose]
+               [erg_inf_ini], flat, isotropic, melrose, bndry_lyr]
       x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc = RT.propagate(
                       func_use_SPHERE, pos0, k0,
                       ax_num, Mvars, NumerPass, RT.func!,
-                      true, false, Mass_a, splittings_cutoff,Δω)
+                      true, false, Mass_a, splittings_cutoff, Δω, bndry_lyr=bndry_lyr)
     else      
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
-               [erg_inf_ini], flat, isotropic, melrose, Mass_a]
+               [erg_inf_ini], flat, isotropic, melrose, Mass_a, bndry_lyr]
       x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc = RT.propagate(
                         func_use_SPHERE, pos0, k0,
                         ax_num, Mvars, NumerPass, RT.func_axion!,
-                        true, true, Mass_a, splittings_cutoff,Δω)
+                        true, true, Mass_a, splittings_cutoff, Δω, bndry_lyr=bndry_lyr)
     end
     pos = transpose(x_e[1, :, :])
     kpos = transpose(k_e[1, :, :])
@@ -234,7 +234,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
 
       # Conversion probability
       Prob_nonAD = get_Prob_nonAD(pos,kpos,Mass_a,Ax_g,θm,ωPul,B0,rNS,
-                            erg_inf_ini .* abs.(Δω), vIfty_mag, flat, isotropic)
+                            erg_inf_ini .* abs.(Δω), vIfty_mag, flat, isotropic, bndry_lyr)
       Prob = 1 .- exp.(-Prob_nonAD)
       event.Pc = Prob
 
@@ -325,7 +325,7 @@ end
 
 function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     Ntajs, gammaF; flat=true, isotropic=false, melrose=false,
-    thick_surface=true,
+    thick_surface=true, bndry_lyr=false,
     ode_err=1e-6, cutT=100000, fix_time=0.0, CLen_Scale=true, file_tag="",
     ntimes=1000, v_NS=[0 0 0], rho_DM=0.45, vmean_ax=220.0, saveMode=0,
     ntimes_ax=1000, dir_tag="results", n_maxSample=6, iseed=-1,
@@ -424,7 +424,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
             xv, Rv, numV, weights, vvec_in, vIfty_in = RT.find_samples(maxR,
                       ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS;
                       n_max=n_maxSample, batchsize=small_batch,
-                      thick_surface=thick_surface, iso=isotropic, melrose=false)
+                      thick_surface=thick_surface, iso=isotropic, melrose=false, bndry_lyr=bndry_lyr)
             f_inx += small_batch
             
             if numV == 0
@@ -489,9 +489,9 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                                 ωPul, B0, rNS, Mass_NS, Mass_a, melrose=melrose,
                                 isotropic=isotropic, flat=flat, ax_fix=true)
                                 
-        ksphere = RT.k_sphere(xpos_flat, k_init, θm, ωPul, B0, rNS, zeros(batchsize), Mass_NS, flat)
+        ksphere = RT.k_sphere(xpos_flat, k_init, θm, ωPul, B0, rNS, zeros(batchsize), Mass_NS, flat, bndry_lyr=bndry_lyr)
         # sln_δw, angleVal = RT.dwp_ds(xpos_flat, ksphere, [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, flat, isotropic, erg_ax])
-        Mvars =  [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, flat, isotropic, erg_ax]
+        Mvars =  [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, flat, isotropic, erg_ax, bndry_lyr]
         sln_δw, angleVal, k_dot_N, dwdk_snorm, vg_mu, vgN  = RT.dwp_ds(xpos_flat, ksphere,  Mvars)
         calpha = cos.(angleVal)
         weight_angle = abs.(calpha)
@@ -505,7 +505,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         
         theta_sf = acos.(xpos_flat[:,3] ./ rmag)
         x0_pl = [rmag theta_sf atan.(xpos_flat[:,2], xpos_flat[:,1])]
-        jacobian_GR = RT.g_det(x0_pl, zeros(batchsize), θm, ωPul, B0, rNS, Mass_NS; flat=flat); # unitless
+        jacobian_GR = RT.g_det(x0_pl, zeros(batchsize), θm, ωPul, B0, rNS, Mass_NS; flat=flat, bndry_lyr=bndry_lyr); # unitless
         
         dense_extra = 2 ./ sqrt.(π) * (1.0 ./ (220.0 ./ c_km)) .* sqrt.(2.0 * Mass_NS * GNew / c_km^2 ./ rmag)
         # phaseS = jacVs.*phaseS.*jacobian_GR
@@ -543,7 +543,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
           # The simplest is always the best: make use of existing code
           nb, _, _ = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
-                flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
+                flat,isotropic, melrose, bndry_lyr, NumerPass;prob_cutoff=prob_cutoff,
                 num_cutoff=0, splittings_cutoff=100000, ax_num=ntimes)
 
           nb = nb[1] 
@@ -615,7 +615,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
               #end
               tree, c, info = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                   Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
-                  flat,isotropic,melrose,NumerPass;prob_cutoff=prob_cutoff,
+                  flat,isotropic, melrose, bndry_lyr, NumerPass;prob_cutoff=prob_cutoff,
                   num_cutoff=num_cutoff,ax_num=ntimes,MC_nodes=MC_nodes,
                   max_nodes=max_nodes)
               count += c

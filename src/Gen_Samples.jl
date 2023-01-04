@@ -160,6 +160,7 @@ ntimes = 3 # how many points on photon traj to keep
 flat = false; # flat space or schwartzchild
 isotropic = true; # default is anisotropic
 melrose = true; # keep true, more efficient
+bndry_lyr = false # add boundary layer term
 ntimes_ax = 50000; # vector scan for resonance
 vmean_ax = 220.0
 dir_tag = "results"
@@ -174,7 +175,7 @@ time0=Dates.now()
 if parsed_args["run_RT"] == 1
 @inbounds @fastmath main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS,
               Mass_NS, ωProp, Ntajs, gammaF;
-              flat=flat, isotropic=isotropic, melrose=melrose,
+              flat=flat, isotropic=isotropic, melrose=melrose, bndry_lyr=bndry_lyr,
               thick_surface=thick_surface, ode_err=ode_err,
               cutT=cutT, fix_time=fix_time, CLen_Scale=CLen_Scale,
               file_tag=file_tag, ntimes=ntimes, v_NS=vNS, rho_DM=rho_DM,
