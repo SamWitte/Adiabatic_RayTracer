@@ -123,7 +123,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   # Note: turned of to make bound orbits more likely
   # tot_prob = 1 - first.prob
 
-  count = -1
+  count = 0
   count_main = 0
   info = 1
  
@@ -175,7 +175,10 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
         # Since we are considering the most probable first
         count_main += 1
         tot_prob += event.weight
-        event.is_final = true
+        # It is "final" if it is not killed by the NS
+        if sum(pos[end, :].^2)^.5 > rNS*1.1
+          event.is_final = true
+        end
     else
 
       ##########################################################################
@@ -668,7 +671,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                       f_inx += 1
                   end
                   if saveMode > 0 # Save more
-                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1] tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1] c info tree[ii].prob tree[ii].prob_conv tree[ii].prob_conv0]
+                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1] tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1] c info tree[ii].prob tree[ii].prob_conv tree[ii].prob_conv0 samp_back_weight absfX]
 
                   else
                     # print(θfX, "\t", ϕfX, "\n")
