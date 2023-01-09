@@ -793,7 +793,7 @@ function GJ_Model_vec(x, t, θm, ω, B0, rNS; bndry_lyr=false)
     if bndry_lyr
         nelec_pole = abs.((2.0 .* ω .* B0) ./ sqrt.(4 .* π ./ 137) .* (1.95e-2) .* hbar) ; # eV^3
         pole_val = sqrt.(4 .* π .* nelec ./ 137 ./ 5.0e5);
-        ωp[r .>= rNS] .+= pole_val[r .>= rNS] .* (rNS ./ r[r .>= rNS]).^5
+        ωp[r .>= rNS] .+= pole_val[r .>= rNS] .* (rNS ./ r[r .>= rNS]).^(3.0 ./ 2.0)
     end
     
     return [Bx By Bz], ωp
@@ -1050,7 +1050,7 @@ function GJ_Model_ωp_vecSPH(x, t, θm, ω, B0, rNS; zeroIn=true, bndry_lyr=fals
     if bndry_lyr
         nelec_pole = abs.((2.0 .* ω .* B0) ./ sqrt.(4 .* π ./ 137) .* (1.95e-2) .* hbar) ; # eV^3
         pole_val = sqrt.(4 .* π .* nelec ./ 137 ./ 5.0e5);
-        ωp .+= pole_val .* (rNS ./ r).^5
+        ωp .+= pole_val .* (rNS ./ r).^(3.0 ./ 2.0)
     end
 
     if zeroIn
