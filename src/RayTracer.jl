@@ -271,91 +271,112 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     # Stop integration when a given number of level crossings is achieved
     # Multiple callbacks -> CallbackSet
-    if make_tree
+    n_ode = 0
+    cut_short = false
+    # Store crossings to be used later
+    xc = []; yc = []; zc = []
+    kxc = []; kyc = []; kzc = []
+    tc = []; Δωc = []
 
-      cut_short = false
-      
-      # Store crossings to be used later
-      xc = []; yc = []; zc = []
-      kxc = []; kyc = []; kzc = []
-      tc = []; Δωc = []
+    while n_ode<20
+      if make_tree
+        
+        # Cut after given amount of crossings
+        function condition(u, lnt, integrator)
+          return (log.(GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr))
+                  .- log.(Mass_a))[1]
+        end
+        function affect!(i)
 
-      # Cut after given amount of crossings
-      function condition(u, lnt, integrator)
-        return (log.(GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr))
-                .- log.(Mass_a))[1]
-      end
-      function affect!(i)
+            if i.opts.userdata[:callback_count] == 0
+              # If i.u has not changed, it is not a new crossings...
+              s = 1.0001
+              pos = [sin(i.u[2])*cos(i.u[3]) sin(i.u[2])*sin(i.u[3]) cos(i.u[2])]
+              pos .*= i.u[1]
+              if ( all(abs.(pos[1:3]) .< abs.(x0[1:3]).*s) &&
+                   all(abs.(pos[1:3]) .> abs.(x0[1:3])./s) )
+                return
+              end
+            end
 
-          if i.opts.userdata[:callback_count] == 0
-            # If i.u has not changed, it is not a new crossings...
-            s = 1.0001
-            pos = [sin(i.u[2])*cos(i.u[3]) sin(i.u[2])*sin(i.u[3]) cos(i.u[2])]
-            pos .*= i.u[1]
-            if ( all(abs.(pos[1:3]) .< abs.(x0[1:3]).*s) &&
-                 all(abs.(pos[1:3]) .> abs.(x0[1:3])./s) )
+            # Compute position in cartesian coordinates
+            xpos = i.u[1]*sin(i.u[2])*cos(i.u[3]) 
+            ypos = i.u[1]*sin(i.u[2])*sin(i.u[3])
+            zpos = i.u[1]*cos(i.u[2])
+            # Conversions close to the surface is unlikely
+            # Slightly better to include this in "condition"!
+            if sqrt(xpos^2 + ypos^2 + zpos^2) < rNS*1.01
               return
             end
-          end
+            push!( xc, xpos )
+            push!( yc, ypos )
+            push!( zc, zpos )
+            push!( tc, exp(i.t) ) # proper time
+            push!( Δωc, i.u[7]/erg )
 
-          # Compute position in cartesian coordinates
-          xpos = i.u[1]*sin(i.u[2])*cos(i.u[3]) 
-          ypos = i.u[1]*sin(i.u[2])*sin(i.u[3])
-          zpos = i.u[1]*cos(i.u[2])
-          # Conversions close to the surface is unlikely
-          # Slightly better to include this in "condition"!
-          if sqrt(xpos^2 + ypos^2 + zpos^2) < rNS*1.01
-            return
-          end
-          push!( xc, xpos )
-          push!( yc, ypos )
-          push!( zc, zpos )
-          push!( tc, exp(i.t) ) # proper time
-          push!( Δωc, i.u[7]/erg )
+            # Compute proper velocity
+            r_s = 2.0 * Mass_NS * GNew / c_km^2
+            ω = 1.0 - r_s / i.u[1]
+            v_pl = [i.u[4]*sqrt(ω)  i.u[5]/i.u[1]  i.u[6]/(i.u[1]*sin(i.u[2]))]
+            v_pl .*= erg[1]*ω
+            v_tmp = sin(i.u[2])*v_pl[1] + cos(i.u[2])*v_pl[2]
+            push!( kxc, cos(i.u[3])*v_tmp   - sin(i.u[3])*v_pl[3] )
+            push!( kyc, sin(i.u[3])*v_tmp   + cos(i.u[3])*v_pl[3] )
+            push!( kzc, cos(i.u[2])*v_pl[1] - sin(i.u[2])*v_pl[2] ) 
 
-          # Compute proper velocity
-          r_s = 2.0 * Mass_NS * GNew / c_km^2
-          ω = 1.0 - r_s / i.u[1]
-          v_pl = [i.u[4]*sqrt(ω)  i.u[5]/i.u[1]  i.u[6]/(i.u[1]*sin(i.u[2]))]
-          v_pl .*= erg[1]*ω
-          v_tmp = sin(i.u[2])*v_pl[1] + cos(i.u[2])*v_pl[2]
-          push!( kxc, cos(i.u[3])*v_tmp   - sin(i.u[3])*v_pl[3] )
-          push!( kyc, sin(i.u[3])*v_tmp   + cos(i.u[3])*v_pl[3] )
-          push!( kzc, cos(i.u[2])*v_pl[1] - sin(i.u[2])*v_pl[2] ) 
+            # Check if we want to stop ODE
+            i.opts.userdata[:callback_count] +=1
+            if i.opts.userdata[:callback_count] >= i.opts.userdata[:max_count]
+                cut_short = true
+                terminate!(i)
+            end
+        end
+        # Cut if inside a neutron star (and a photon). 
+        condition_r(u,lnt,integrator) = u[1] < (rNS*1.01)
+        affect_r!(integrator) = terminate!(integrator)
+       
+        cb_s = ContinuousCallback(condition, affect!)
+        cb_r = DiscreteCallback(condition_r, affect_r!)
+        if is_axion
+          cbset = CallbackSet(cb_s) # cb->reflection, cb_->NS, not for axion
+        else
+          cbset = CallbackSet(cb, cb_s, cb_r)
+        end
 
-          # Check if we want to stop ODE
-          i.opts.userdata[:callback_count] +=1
-          if i.opts.userdata[:callback_count] >= i.opts.userdata[:max_count]
-              cut_short = true
-              terminate!(i)
-          end
-      end
-      # Cut if inside a neutron star (and a photon). 
-      condition_r(u,lnt,integrator) = u[1] < (rNS*1.01)
-      affect_r!(integrator) = terminate!(integrator)
-     
-      cb_s = ContinuousCallback(condition, affect!)
-      cb_r = DiscreteCallback(condition_r, affect_r!)
-      if is_axion
-        cbset = CallbackSet(cb_s) # cb->reflection, cb_->NS, not for axion
+        prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], callback=cbset, userdata=Dict(:callback_count=>0, :max_count=>max_crossings))
+        # prob = ODEProblem(rhs, u0, tspan, [ω, Mvars])
       else
-        cbset = CallbackSet(cb, cb_s, cb_r)
+      #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      # Define the ODEproblem
+        prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], callback=cb)
+        # prob = ODEProblem(rhs, u0, tspan, [ω, Mvars])
       end
 
-      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], callback=cbset, userdata=Dict(:callback_count=>0, :max_count=>max_crossings))
-      # prob = ODEProblem(rhs, u0, tspan, [ω, Mvars])
-    else
-    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    # Define the ODEproblem
-      prob = ODEProblem(rhs, u0, tspan, [ω, Mvars], callback=cb)
-      # prob = ODEProblem(rhs, u0, tspan, [ω, Mvars])
-    end
+
+      if n_ode < 10 # The two first are usually quite fast
+         # Solve the ODEproblem
+         solver = Vern6()
+      elseif n_ode < 13
+         solver = AutoVern6(Rodas5())
+      elseif n_ode < 16
+         solver = AutoTsit5(Rosenbrock23())
+      else
+         solver = AutoTsit5(Rodas5(),nonstifftol = 11/10)
+      end
+
+      sol = solve(prob, solver, saveat=saveat, reltol=1e-5, abstol=ode_err,
+              max_iters=1e5, force_dtmin=true,
+              dtmin=1e-13, dtmax=1e-2)
 
 
-    # Solve the ODEproblem
-    sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err,
-            max_iters=1e5, force_dtmin=true,
-            dtmin=1e-13, dtmax=1e-2)
+      n_ode += 1
+      if sol.retcode == :Success || sol.retcode == :Terminated
+        break
+      else
+        print(sol.retcode, " Trying again!!! (", n_ode, ")\n")
+      end
+
+    end # n_ode
 
 
     for i in 1:length(sol.u)
@@ -421,7 +442,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     GC.gc();
    
     if make_tree
-      return x_reshaped,v_reshaped,dt,fail_indx,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc
+      return x_reshaped,v_reshaped,dt,fail_indx,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc,n_ode
     else
       return x_reshaped,v_reshaped,dt,fail_indx
     end
