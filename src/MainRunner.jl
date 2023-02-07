@@ -130,8 +130,6 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   NumerPass = copy(NumerPass_in)
   dt0 = exp(NumerPass[1])
 
-  n_ode_max = 0
-
   while length(events) > 0
     
     count += 1
@@ -155,7 +153,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     if event.species == "photon"
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose, bndry_lyr]
-      x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc,n_ode = RT.propagate(
+      x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc = RT.propagate(
                       func_use_SPHERE, pos0, k0,
                       ax_num, Mvars, NumerPass, RT.func!,
                       true, false, Mass_a, splittings_cutoff, Δω,
@@ -163,7 +161,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     else      
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose, Mass_a, bndry_lyr]
-      x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc,n_ode = RT.propagate(
+      x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc = RT.propagate(
                         func_use_SPHERE, pos0, k0,
                         ax_num, Mvars, NumerPass, RT.func_axion!,
                         true, true, Mass_a, splittings_cutoff, Δω,
@@ -172,10 +170,6 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     pos = transpose(x_e[1, :, :])
     kpos = transpose(k_e[1, :, :])
    
-    if n_ode > n_ode_max
-      n_ode_max = n_ode
-    end
-
     event.traj = pos
     event.mom = kpos
     event.erg = transpose(t_e[1, :])
@@ -330,7 +324,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     info = -abs(info)
   end
 
-  return tree, count, info, n_ode_max 
+  return tree, count, info 
 
 end
 
@@ -555,7 +549,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                 -k_init[i, 1], -k_init[i, 2], -k_init[i, 3], 0, -1.0, # Δω0
                 "axion", 1.0, 1.0, -1.0, -1.0, -1.0)
           # The simplest is always the best: make use of existing code
-          nb, c_bck, _, n_ode_bck = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
+          nb, c_bck, _ = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
                 flat,isotropic, melrose, bndry_lyr, NumerPass;
                 prob_cutoff=prob_cutoff, num_cutoff=0, splittings_cutoff=100000,
@@ -628,7 +622,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                                  -1.0, "photon", 1.0, 1.0,
                                  -1.0, -1.0, -1.0 )
               #end
-              tree, c, info, n_ode = get_tree(
+              tree, c, info = get_tree(
                   parent,erg_inf_ini[i],vIfty_mag[i],
                   Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
                   flat,isotropic, melrose, bndry_lyr, NumerPass;prob_cutoff=prob_cutoff,
@@ -684,7 +678,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                       f_inx += 1
                   end
                   if saveMode > 0 # Save more
-                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1] tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1] c info tree[ii].prob tree[ii].prob_conv tree[ii].prob_conv0 samp_back_weight absfX n_ode c_bck n_ode_bck]
+                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1] tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1] c info tree[ii].prob tree[ii].prob_conv tree[ii].prob_conv0 samp_back_weight absfX c_bck]
 
                   else
                     # print(θfX, "\t", ϕfX, "\n")

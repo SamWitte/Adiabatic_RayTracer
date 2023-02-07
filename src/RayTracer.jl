@@ -271,7 +271,6 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     # Stop integration when a given number of level crossings is achieved
     # Multiple callbacks -> CallbackSet
-    n_ode = 0
     cut_short = false
     # Store crossings to be used later
     xc = []; yc = []; zc = []
@@ -423,7 +422,7 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     GC.gc();
    
     if make_tree
-      return x_reshaped,v_reshaped,dt,fail_indx,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc,n_ode
+      return x_reshaped,v_reshaped,dt,fail_indx,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc
     else
       return x_reshaped,v_reshaped,dt,fail_indx
     end
