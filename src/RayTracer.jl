@@ -109,7 +109,7 @@ function func_axion!(du, u, Mvars, lnt)
        
         r = u[:, 1]
         Mass_NS = Mass_NS*ones(length(r))
-        Mass_NS[r .< rNS] = r[r .< rNS].^3/rNS^3
+        Mass_NS[r .< rNS] .*= r[r .< rNS].^3/rNS^3
 
         g_tt, g_rr, g_thth, g_pp = g_schwartz(view(u, :, 1:3), Mass_NS);
 
@@ -278,7 +278,6 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
     kxc = []; kyc = []; kzc = []
     tc = []; Δωc = []
 
-    while n_ode<20
       if make_tree
         
         # Cut after given amount of crossings
@@ -353,30 +352,12 @@ function propagate(ω, x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!
       end
 
 
-      if n_ode < 10 # The two first are usually quite fast
-         # Solve the ODEproblem
          solver = Vern6()
-      elseif n_ode < 13
-         solver = AutoVern6(Rodas5())
-      elseif n_ode < 16
-         solver = AutoTsit5(Rosenbrock23())
-      else
-         solver = AutoTsit5(Rodas5(),nonstifftol = 11/10)
-      end
 
       sol = solve(prob, solver, saveat=saveat, reltol=1e-5, abstol=ode_err,
               max_iters=1e5, force_dtmin=true,
               dtmin=1e-13, dtmax=1e-2)
 
-
-      n_ode += 1
-      if sol.retcode == :Success || sol.retcode == :Terminated
-        break
-      else
-        print(sol.retcode, " Trying again!!! (", n_ode, ")\n")
-      end
-
-    end # n_ode
 
 
     for i in 1:length(sol.u)

@@ -103,7 +103,7 @@ end
 
 function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,flat,isotropic,melrose,bndry_lyr,
-    NumerPass; num_cutoff=5, prob_cutoff=1e-10,splittings_cutoff=-1,
+    NumerPass_in; num_cutoff=5, prob_cutoff=1e-10,splittings_cutoff=-1,
     ax_num=100, MC_nodes=5, max_nodes=50)
 
   # Initial conversion probability
@@ -127,6 +127,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   count_main = 0
   info = 1
  
+  NumerPass = copy(NumerPass_in)
   dt0 = exp(NumerPass[1])
 
   n_ode_max = 0
