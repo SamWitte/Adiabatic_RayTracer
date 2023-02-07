@@ -1,8 +1,7 @@
 __precompile__()
 
 RT = RayTracerGR; # define ray tracer module
-func_use = RT.ωNR_e
-func_use_SPHERE = RT.ωSimple_SPHERE
+
 
 function printTree(n::Array)
     print("\n")
@@ -93,7 +92,7 @@ function get_Prob_nonAD(pos::Array, kpos::Array,
     
 #    B_tot = Bmag .* (1.95e-20) ; # GeV^2
 #    MagnetoVars =  [θm, ωPul, B0, rNS, [1.0 1.0], zeros(Nc), erg_ax]
-#    sln_δk = RT.dk_ds(pos, kpos, [func_use, MagnetoVars]);
+#    sln_δk = RT.dk_ds(pos, kpos, [ MagnetoVars]);
 #    conversion_F = sln_δk ./  (6.58e-16 .* 2.998e5) # 1/km^2;
 #    Prob_nonAD = (π ./ 2 .* (Ax_g .* B_tot) .^2 ./ conversion_F .*
 #          (1e9 .^2) ./ (vmag_tot ./ 2.998e5) .^2 ./
@@ -150,19 +149,22 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
 
     # propagate photon or axion
     if event.species == "photon"
+      # print("propagate photon \n")
+      
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose, bndry_lyr]
       x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc = RT.propagate(
-                      func_use_SPHERE, pos0, k0,
-                      ax_num, Mvars, NumerPass, RT.func!,
-                      true, false, Mass_a, splittings_cutoff, Δω, bndry_lyr=bndry_lyr)
-    else      
+                    pos0, k0,
+                    ax_num, Mvars, NumerPass, RT.func!,
+                    true, false, Mass_a, splittings_cutoff, Δω)
+    else
+      # print("propagate axion \n")
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose, Mass_a, bndry_lyr]
       x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc = RT.propagate(
-                        func_use_SPHERE, pos0, k0,
+                        pos0, k0,
                         ax_num, Mvars, NumerPass, RT.func_axion!,
-                        true, true, Mass_a, splittings_cutoff, Δω, bndry_lyr=bndry_lyr)
+                        true, true, Mass_a, splittings_cutoff, Δω)
     end
     pos = transpose(x_e[1, :, :])
     kpos = transpose(k_e[1, :, :])
@@ -199,7 +201,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
       # If two crossings are close, it is likely only one crossing
       # This happens (likely only) close to the neutron star surface
       if length(xc) > 1
-        epsabs = 1e-4 # ... as ode_err 
+        epsabs = 1e-5 # ... as ode_err
         r = sqrt.(xc.^2 + yc.^2 + zc.^2)
         tmp = sqrt.(abs.(diff(xc)).^2 .+ abs.(diff(yc)).^2 .+ abs.(diff(zc)).^2)
         if any(tmp .< epsabs)
@@ -361,7 +363,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     if maxR < rNS
         print("Too small Max R.... quitting.... \n")
         omegaP_test = RT.GJ_Model_ωp_scalar(rNS .* [sin.(θm) 0.0 cos.(θm)], 
-                                            0.0, θm, ωPul, B0, rNS);
+                                            0.0, θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr);
         print("Max omegaP found... \t", omegaP_test,
               "Max radius found...\t", maxR, "\n")
         return
@@ -512,8 +514,9 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         
         dense_extra = 2 ./ sqrt.(π) * (1.0 ./ (220.0 ./ c_km)) .* sqrt.(2.0 * Mass_NS * GNew / c_km^2 ./ rmag)
         # phaseS = jacVs.*phaseS.*jacobian_GR
+        redshift_factor = sqrt.(1.0 .- 2 * GNew .* Mass_NS ./ rmag ./ c_km.^2 );
         phaseS = dense_extra .* (2 .* π .* maxR.^2) .* (rho_DM .* 1e9)  ./ Mass_a .* jacobian_GR
-        sln_prob = abs.(k_dot_N) .* phaseS .* (1e5 .^ 2) .* c_km .* 1e5 .*
+        sln_prob = abs.(k_dot_N) .* redshift_factor .* phaseS .* (1e5 .^ 2) .* c_km .* 1e5 .*
                    mcmc_weights # axions in per second
         # print(sln_prob, "\t", abs.(k_dot_N), "\t", maxR, "\t", jacobian_GR, "\t", dense_extra,  "\n")
         # print(rho_DM, "\t", Mass_a, "\t", mcmc_weights, "\n")
