@@ -107,7 +107,7 @@ function func_axion!(du, u, Mvars, lnt)
        
         r = u[:, 1]
         Mass_NS = Mass_NS*ones(length(r))
-        Mass_NS[r .< rNS] = r[r .< rNS].^3/rNS^3
+        Mass_NS[r .< rNS] .*= r[r .< rNS].^3/rNS^3
 
         g_tt, g_rr, g_thth, g_pp = g_schwartz(view(u, :, 1:3), Mass_NS);
 
@@ -241,15 +241,14 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
     #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     # Stop integration when a given number of level crossings is achieved
     # Multiple callbacks -> CallbackSet
+    cut_short = false
+    # Store crossings to be used later
+    xc = []; yc = []; zc = []
+    kxc = []; kyc = []; kzc = []
+    tc = []; Δωc = []
+
     if make_tree
-
-      cut_short = false
       
-      # Store crossings to be used later
-      xc = []; yc = []; zc = []
-      kxc = []; kyc = []; kzc = []
-      tc = []; Δωc = []
-
       # Cut after given amount of crossings
       function condition(u, lnt, integrator)
         return (log.(GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr))
@@ -327,10 +326,10 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
       prob = ODEProblem(rhs, u0, tspan, Mvars)
     end
 
-
     # Solve the ODEproblem
     # sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err, userdata=Dict(:callback_count=>0, :max_count=>max_crossings))
     sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err)
+
 
 
     for i in 1:length(sol.u)

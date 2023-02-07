@@ -102,7 +102,7 @@ end
 
 function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,flat,isotropic,melrose,bndry_lyr,
-    NumerPass; num_cutoff=5, prob_cutoff=1e-10,splittings_cutoff=-1,
+    NumerPass_in; num_cutoff=5, prob_cutoff=1e-10,splittings_cutoff=-1,
     ax_num=100, MC_nodes=5, max_nodes=50)
 
   # Initial conversion probability
@@ -126,6 +126,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
   count_main = 0
   info = 1
  
+  NumerPass = copy(NumerPass_in)
   dt0 = exp(NumerPass[1])
 
   while length(events) > 0
@@ -168,7 +169,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     end
     pos = transpose(x_e[1, :, :])
     kpos = transpose(k_e[1, :, :])
-    
+   
     event.traj = pos
     event.mom = kpos
     event.erg = transpose(t_e[1, :])
@@ -346,6 +347,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     else
       Random.seed!(iseed)
     end
+    print("Using seed ", iseed, "\n")
 
     batchsize=1
     saveAll = nothing
@@ -429,7 +431,8 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
             xv, Rv, numV, weights, vvec_in, vIfty_in = RT.find_samples(maxR,
                       ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS;
                       n_max=n_maxSample, batchsize=small_batch,
-                      thick_surface=thick_surface, iso=isotropic, melrose=false, bndry_lyr=bndry_lyr)
+                      thick_surface=thick_surface, iso=isotropic, melrose=false,
+                      bndry_lyr=bndry_lyr)
             f_inx += small_batch
             
             if numV == 0
@@ -547,10 +550,11 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                 -k_init[i, 1], -k_init[i, 2], -k_init[i, 3], 0, -1.0, # Δω0
                 "axion", 1.0, 1.0, -1.0, -1.0, -1.0)
           # The simplest is always the best: make use of existing code
-          nb, _, _ = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
+          nb, c_bck, _ = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
                 Mass_a,Ax_g,θm,ωPul,-B0,rNS,Mass_NS,gammaF,
-                flat,isotropic, melrose, bndry_lyr, NumerPass;prob_cutoff=prob_cutoff,
-                num_cutoff=0, splittings_cutoff=100000, ax_num=ntimes)
+                flat,isotropic, melrose, bndry_lyr, NumerPass;
+                prob_cutoff=prob_cutoff, num_cutoff=0, splittings_cutoff=100000,
+                ax_num=ntimes)
 
           nb = nb[1] 
           
@@ -619,7 +623,8 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                                  -1.0, "photon", 1.0, 1.0,
                                  -1.0, -1.0, -1.0 )
               #end
-              tree, c, info = get_tree(parent,erg_inf_ini[i],vIfty_mag[i],
+              tree, c, info = get_tree(
+                  parent,erg_inf_ini[i],vIfty_mag[i],
                   Mass_a,Ax_g,θm,ωPul,B0,rNS,Mass_NS,gammaF,
                   flat,isotropic, melrose, bndry_lyr, NumerPass;prob_cutoff=prob_cutoff,
                   num_cutoff=num_cutoff,ax_num=ntimes,MC_nodes=MC_nodes,
@@ -674,7 +679,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                       f_inx += 1
                   end
                   if saveMode > 0 # Save more
-                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1] tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1] c info tree[ii].prob tree[ii].prob_conv tree[ii].prob_conv0 samp_back_weight absfX]
+                    row = [photon_trajs id θf ϕf θfX ϕfX absfX sln_prob[1] weight_tmp xpos_flat[i,1] xpos_flat[i,2] xpos_flat[i,3] Δω[1] tree[ii].weight opticalDepth weightC k_init[i,1] k_init[i,2] k_init[i,3] calpha[1] c info tree[ii].prob tree[ii].prob_conv tree[ii].prob_conv0 samp_back_weight absfX c_bck]
 
                   else
                     # print(θfX, "\t", ϕfX, "\n")
