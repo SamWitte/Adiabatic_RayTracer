@@ -72,7 +72,6 @@ function func!(du, u, Mvars, lnt)
     @inbounds begin
         t = exp.(lnt);
         
-        Mass_NS = 1.0;
         
         θm, ωPul, B0, rNS, gammaF, time0, Mass_NS, erg, flat, isotropic, melrose, bndry_lyr = Mvars;
         if flat
@@ -97,7 +96,6 @@ function func_axion!(du, u, Mvars, lnt)
     @inbounds begin
         t = exp.(lnt);
         
-        Mass_NS = 1.0;
         
         θm, ωPul, B0, rNS, gammaF, time0, Mass_NS, erg, flat, isotropic, melrose, mass_axion = Mvars;
         if flat
@@ -328,7 +326,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
 
     # Solve the ODEproblem
     # sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err, userdata=Dict(:callback_count=>0, :max_count=>max_crossings))
-    sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err)
+    sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err, dtmin=1e-13)
 
 
 
@@ -515,7 +513,7 @@ function hamiltonian_axion(x, k,  time0, erg, θm, ωPul, B0, rNS,
     g_tt, g_rr, g_thth, g_pp = g_schwartz(x, Mass_NS)
     ksqr = g_tt .* erg.^2 .+ g_rr .* k[:, 1].^2 .+ g_thth .* k[:, 2].^2 .+
             g_pp .* k[:, 3].^2
-    #print(ksqr, "\n") 
+ 
     return 0.5 .* ksqr
     
 end
@@ -1319,7 +1317,6 @@ function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_m
     vIfty_mag = sqrt.(sum(vIfty.^2, dims=2));
     gammaA = 1 ./ sqrt.(1.0 .- (vIfty_mag ./ c_km).^2 )
     erg_inf_ini = Mass_a .* sqrt.(1 .+ (vIfty_mag ./ c_km .* gammaA).^2)
-    Mass_NS = 1.0
 
     if !thick_surface
         cxing_st = [get_crossings(log.(GJ_Model_ωp_vec(x_axion[i], 0.0, θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)) .- log.(Mass_a)) for i in 1:batchsize];
