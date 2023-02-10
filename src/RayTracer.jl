@@ -326,7 +326,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
 
     # Solve the ODEproblem
     # sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err, userdata=Dict(:callback_count=>0, :max_count=>max_crossings))
-    sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err, dtmin=1e-13)
+    sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err, dtmin=1e-13, force_dtmin=true)
 
 
 
