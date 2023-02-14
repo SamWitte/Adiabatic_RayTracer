@@ -253,6 +253,8 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
         return (log.(GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr))
                 .- log.(Mass_a))[1]
       end
+      
+      callback_count = 0
       function affect!(i)
 
 #          if i.opts.userdata[:callback_count] == 0
@@ -294,12 +296,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
           push!( kzc, cos(i.u[2])*v_pl[1] - sin(i.u[2])*v_pl[2] ) 
 
           # Check if we want to stop ODE
-#          i.opts.userdata[:callback_count] +=1
-#          if i.opts.userdata[:callback_count] >= i.opts.userdata[:max_count]
-#              cut_short = true
-#              terminate!(i)
-#          end
-          callback_count +=1
+          callback_count += 1
           if callback_count >= max_crossings
               cut_short = true
               terminate!(i)
@@ -333,6 +330,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
     # Solve the ODEproblem
     # sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err, userdata=Dict(:callback_count=>0, :max_count=>max_crossings))
     sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err, dtmin=1e-13, force_dtmin=true, maxiters=1e5)
+
 
 
 
