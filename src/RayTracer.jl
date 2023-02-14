@@ -244,6 +244,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
     xc = []; yc = []; zc = []
     kxc = []; kyc = []; kzc = []
     tc = []; Δωc = []
+    callback_count = 0
 
     if make_tree
       
@@ -298,6 +299,11 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
 #              cut_short = true
 #              terminate!(i)
 #          end
+          callback_count +=1
+          if callback_count >= max_crossings
+              cut_short = true
+              terminate!(i)
+          end
       end
       # Cut if inside a neutron star (and a photon). 
       condition_r(u,lnt,integrator) = u[1] < (rNS*1.01)
@@ -326,7 +332,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
 
     # Solve the ODEproblem
     # sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err, userdata=Dict(:callback_count=>0, :max_count=>max_crossings))
-    sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err, dtmin=1e-13, force_dtmin=true)
+    sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err, dtmin=1e-13, force_dtmin=true, maxiters=1e5)
 
 
 
