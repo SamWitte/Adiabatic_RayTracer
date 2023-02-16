@@ -86,7 +86,7 @@ function func!(du, u, Mvars, lnt)
         du[u[:,1] .<= rNS, :] .= 0.0;
         
         du[:,7 ] .= derivative(tI -> hamiltonian(view(u, :, 1:3), view(u, :, 4:6)  .* erg , tI, -view(u, :, 7), θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=melrose, bndry_lyr=bndry_lyr), time[1])[:] .* t .* (g_rr[:] ./ -view(u, :, 7));
-        
+    
     end
 end
 
@@ -175,9 +175,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
     
     tspan = (ln_tstart, ln_tend)
     saveat = (tspan[2] .- tspan[1]) ./ (nsteps-1)
-    
-    
-    
+   
     
     if is_axion 
       θm,ωPul,B0,rNS,gammaF,time0,Mass_NS,erg,flat,isotropic,melrose,Mass_a,bndry_lyr=Mvars;
@@ -223,9 +221,10 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
     function out_domain(u, Mvars, lnt)
         
         r_s0 = 2.0 * Mass_NS * GNew / c_km^2
-        u[u[:, 1] .< rNS, 1] .= rNS
-        AA = sqrt.(1.0 .- r_s0 ./ u[:, 1])
-        testCond = (-u[:,7] ./ AA .- GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)) ./ abs.(u[:,7])
+        # If the photon is inside the NS, it will be killed by a callback
+        # function soon. We therefore simply use abs
+        AA = sqrt.(abs.(1.0 .- r_s0 ./ u[:, 1]))
+        testCond = (-u[:,7] ./ AA .- GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)) ./ abs.(u[:,7] )
         
         if sum(testCond .< 0) .> 0.0
             return true
@@ -234,8 +233,6 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
         end
     end
     
-    
-
     #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     # Stop integration when a given number of level crossings is achieved
     # Multiple callbacks -> CallbackSet
@@ -249,23 +246,25 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
       
       # Cut after given amount of crossings
       function condition(u, lnt, integrator)
-        return (log.(GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr))
-                .- log.(Mass_a))[1]
+        return (GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)
+                .- Mass_a)[1]
       end
       
       callback_count = 0
       function affect!(i)
 
-#          if i.opts.userdata[:callback_count] == 0
-#            # If i.u has not changed, it is not a new crossings...
-#            s = 1.0001
-#            pos = [sin(i.u[2])*cos(i.u[3]) sin(i.u[2])*sin(i.u[3]) cos(i.u[2])]
-#            pos .*= i.u[1]
-#            if ( all(abs.(pos[1:3]) .< abs.(x0[1:3]).*s) &&
-#                 all(abs.(pos[1:3]) .> abs.(x0[1:3])./s) )
-#              return
-#            end
-#          end
+          if callback_count == 0
+            # If i.u has not changed, it is not a new crossings...
+            # There is now a way to do this with a input into the
+            # condition.
+            s = 1.0001
+            pos = [sin(i.u[2])*cos(i.u[3]) sin(i.u[2])*sin(i.u[3]) cos(i.u[2])]
+            pos .*= i.u[1]
+            if ( all(abs.(pos[1:3]) .< abs.(x0[1:3]).*s) &&
+                 all(abs.(pos[1:3]) .> abs.(x0[1:3])./s) )
+              return
+            end
+          end
 
           # Compute position in cartesian coordinates
           xpos = i.u[1]*sin(i.u[2])*cos(i.u[3]) 
@@ -280,9 +279,10 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
           push!( yc, ypos )
           push!( zc, zpos )
           push!( tc, exp(i.t) ) # proper time
-          push!( Δωc, i.u[7]/erg )
+          push!( Δωc, (i.u[7]/erg)[1] )
           
-          # print("Test \t ", i.u, "\t", GJ_Model_ωp_vecSPH(i.u, exp.(i.t), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr), "\t",bndry_lyr,  "\n")
+          #print("Test \t ", i.u, "\t", GJ_Model_ωp_vecSPH(i.u, exp.(i.t), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr), "\t",bndry_lyr,  " ",  (log.(GJ_Model_ωp_vecSPH(i.u, exp.(i.t), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr))
+           #     .- log.(Mass_a))[1], "\n")
          
           # Compute proper velocity
           r_s = 2.0 * Mass_NS * GNew / c_km^2
@@ -307,7 +307,8 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
       
        
      
-      cb_s = ContinuousCallback(condition, affect!, interp_points=50)
+      cb_s = ContinuousCallback(condition, affect!,
+                  rootfind=true, interp_points=50)
       cb_r = DiscreteCallback(condition_r, affect_r!)
     
       if is_axion
@@ -315,7 +316,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
         prob = ODEProblem(rhs, u0, tspan, Mvars, callback=cbset)
       else
         cbset = CallbackSet(cb_s, cb_r)
-        prob = ODEProblem(rhs, u0, tspan, Mvars, isoutofdomain=out_domain, callback=cbset)
+        prob = ODEProblem(rhs, u0, tspan, Mvars, callback=cbset)
       end
 
       # prob = ODEProblem(rhs, u0, tspan, Mvars, callback=cbset)
@@ -325,10 +326,10 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
     # Define the ODEproblem
       prob = ODEProblem(rhs, u0, tspan, Mvars)
     end
-
+    #print(u0, " ", Mvars, " ", tspan, "\n")
     # Solve the ODEproblem
     sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err,
-                dtmin=1e-13, force_dtmin=true)
+                dtmin=1e-13, force_dtmin=true, maxiters=1e5)
 
 
 
@@ -387,7 +388,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
     
    
     if make_tree
-      return x_reshaped,v_reshaped,dt,fail_indx,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc
+      return x_reshaped,v_reshaped,dt,fail_indx,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc,node
     else
       return x_reshaped,v_reshaped,dt,fail_indx
     end
@@ -409,7 +410,9 @@ function g_schwartz(x0, Mass_NS; rNS=10.0)
     # suppress GR inside NS
     # rs[r .<= rNS] .= 0.0
     rs = ones(eltype(r), size(r)) .* 2 * GNew .* Mass_NS ./ c_km.^2
-    rs[r .<= rNS] .*= (r[r .<= rNS] ./ rNS).^3
+    # Mass_NS is already re-adjusted in func_axion!...
+    #---rs[r .<= rNS] .*= (r[r .<= rNS] ./ rNS).^3
+
 
     sin_theta = sin.(x0[:,2])
     g_tt = -1.0 ./ (1.0 .- rs ./ r);
@@ -536,7 +539,6 @@ function k_norm_Cart(x0, khat, time0, erg, θm, ωPul, B0, rNS, Mass_NS, Mass_a;
     # [unitless, unitless, unitless ]
     dr_dt = sum(x0 .* khat, dims=2) ./ rr
     v0_pl = [dr_dt (x0[:,3] .* dr_dt .- rr .* khat[:,3]) ./ (rr .* sin.(x0_pl[:,2])) (-x0[:,2] .* khat[:,1] .+ x0[:,1] .* khat[:,2]) ./ (rr .* sin.(x0_pl[:,2])) ];
-    
     # Switch to celerity in polar coordinates
     AA = (1.0 .- r_s0 ./ rr)
     
@@ -558,6 +560,7 @@ function k_norm_Cart(x0, khat, time0, erg, θm, ωPul, B0, rNS, Mass_NS, Mass_a;
             NrmSq = (-erg.^2 .* g_tt .- omP.^2) ./ (w0_pl[:, 1].^2 .* g_rr .+  w0_pl[:, 2].^2 .* g_thth .+ w0_pl[:, 3].^2 .* g_pp .- omP.^2 ./ (-erg.^2 .* g_tt) .* kpar.^2 )
         end
     else
+
         NrmSq = (-erg.^2 .* g_tt .- Mass_a.^2) ./ (w0_pl[:, 1].^2 .* g_rr .+  w0_pl[:, 2].^2 .* g_thth .+ w0_pl[:, 3].^2 .* g_pp )
     end
           
