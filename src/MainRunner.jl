@@ -151,7 +151,6 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     # propagate photon or axion
     if event.species == "photon"
       print("propagate photon \n")
-      
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose, bndry_lyr]
       x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc = RT.propagate(
@@ -240,7 +239,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
 
       # Conversion probability
       Prob_nonAD = get_Prob_nonAD(pos,kpos,Mass_a,Ax_g,θm,ωPul,B0,rNS,
-                            erg_inf_ini .* abs.(Δω), vIfty_mag, flat, isotropic, bndry_lyr)
+                          erg_inf_ini .* abs.(Δωc), vIfty_mag, flat, isotropic, bndry_lyr)
       Prob = 1 .- exp.(-Prob_nonAD)
       event.Pc = Prob
 
@@ -340,13 +339,14 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     prob_cutoff=1e-10)
 
     if iseed < 0
-      iseed = rand(0:1000000)
+      iseed = rand(0:100000000)
       Random.seed!(iseed)
     elseif iseed == 0
       Random.seed!()
     else
       Random.seed!(iseed)
     end
+
     print("Using seed ", iseed, "\n")
 
     batchsize=1
@@ -423,7 +423,15 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     tot_count = 0
     # Random.seed!(iseed)
     while photon_trajs < desired_trajs
-        
+
+        # --- DEBUG ---
+        #iseed = rand(0:100000000)
+        #iseed = 51471221
+        #Random.seed!(iseed)
+        #print(photon_trajs, " ")
+        #print(iseed, "\n")
+        # -------------
+
         # First part of code here is just written to generate evenly spaced
         # samples of conversion surface
         
@@ -526,8 +534,6 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         
         for i in 1:batchsize
 
-          #print("NEW EVENT: ", photon_trajs, "\n") # DEBUG
-          
           time0=time()
 
           if saveMode > 1
