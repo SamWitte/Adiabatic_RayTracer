@@ -81,8 +81,6 @@ function func!(du, u, Mvars, lnt)
         
         g_tt, g_rr, g_thth, g_pp = g_schwartz(view(u, :, 1:3), Mass_NS);
         
-        
-        
         du[:, 4:6] .= -grad(hamiltonian(seed(view(u, :, 1:3)), view(u, :, 4:6) .* erg , time[1], -view(u, :, 7), θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=melrose)) .* c_km .* t .* (g_rr ./ -view(u, :, 7)) ./ erg;
         du[:, 1:3] .= grad(hamiltonian(view(u, :, 1:3), seed(view(u, :, 4:6)  .* erg ), time[1], -view(u, :, 7), θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=melrose)) .* c_km .* t .* (g_rr ./ -view(u, :, 7));
         du[u[:,1] .<= rNS, :] .= 0.0;
@@ -105,10 +103,7 @@ function func_axion!(du, u, Mvars, lnt)
         end
         time = time0 .+  t;
        
-        r = u[:, 1]
-        Mass_NS = Mass_NS*ones(length(r))
-        Mass_NS[r .< rNS] .*= r[r .< rNS].^3/rNS^3
-
+        
         g_tt, g_rr, g_thth, g_pp = g_schwartz(view(u, :, 1:3), Mass_NS);
 
 
@@ -228,9 +223,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
     
 
     function out_domain(u, Mvars, lnt)
-        
         r_s0 = 2.0 * Mass_NS * GNew / c_km^2
-        u[u[:, 1] .< rNS, 1] .= rNS
         AA = sqrt.(1.0 .- r_s0 ./ u[:, 1])
         testCond = (-erg ./ AA .- GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)) ./ erg
         
@@ -257,7 +250,8 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
       
       # Cut after given amount of crossings
       function condition(u, lnt, integrator)
-        return (log.(GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)) .- log.(Mass_a))[1]
+        # return (log.(GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)) .- log.(Mass_a))[1]
+        return ((GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)) .- (Mass_a))[1]
       end
       
       callback_count = 0
