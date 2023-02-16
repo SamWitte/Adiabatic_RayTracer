@@ -241,6 +241,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
     xc = []; yc = []; zc = []
     kxc = []; kyc = []; kzc = []
     tc = []; Δωc = []
+    callback_count = 0
 
     if make_tree
       
@@ -330,7 +331,6 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
     # Solve the ODEproblem
     sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err,
                 dtmin=1e-13, force_dtmin=true, maxiters=1e5)
-
 
 
     for i in 1:length(sol.u)
