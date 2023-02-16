@@ -81,8 +81,10 @@ function func!(du, u, Mvars, lnt)
         
         g_tt, g_rr, g_thth, g_pp = g_schwartz(view(u, :, 1:3), Mass_NS);
         
-        du[:, 4:6] .= -grad(hamiltonian(seed(view(u, :, 1:3)), view(u, :, 4:6) .* erg , time[1], -view(u, :, 7), θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=melrose, bndry_lyr=bndry_lyr)) .* c_km .* t .* (g_rr ./ erg) ./ erg;
-        du[:, 1:3] .= grad(hamiltonian(view(u, :, 1:3), seed(view(u, :, 4:6)  .* erg ), time[1], -view(u, :, 7), θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=melrose, bndry_lyr=bndry_lyr)) .* c_km .* t .* (g_rr ./ erg);
+        
+        
+        du[:, 4:6] .= -grad(hamiltonian(seed(view(u, :, 1:3)), view(u, :, 4:6) .* erg , time[1], -view(u, :, 7), θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=melrose)) .* c_km .* t .* (g_rr ./ -view(u, :, 7)) ./ erg;
+        du[:, 1:3] .= grad(hamiltonian(view(u, :, 1:3), seed(view(u, :, 4:6)  .* erg ), time[1], -view(u, :, 7), θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=melrose)) .* c_km .* t .* (g_rr ./ -view(u, :, 7));
         du[u[:,1] .<= rNS, :] .= 0.0;
         
         du[:,7 ] .= derivative(tI -> hamiltonian(view(u, :, 1:3), view(u, :, 4:6)  .* erg , tI, -view(u, :, 7), θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=melrose, bndry_lyr=bndry_lyr), time[1])[:] .* t .* (g_rr[:] ./ -view(u, :, 7));
@@ -184,7 +186,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
       k0 = k_norm_Cart(x0, k0, time0, erg, θm, ωPul, B0, rNS, Mass_NS, Mass_a, melrose=melrose, flat=flat, isotropic=isotropic, is_photon=false, bndry_lyr=bndry_lyr)
     else
       θm,ωPul,B0,rNS,gammaF,time0,Mass_NS,erg,flat,isotropic,melrose,bndry_lyr=Mvars;
-      k0 = k_norm_Cart(x0, k0, time0, erg, θm, ωPul, B0, rNS, Mass_NS, Mass_a, melrose=melrose, flat=flat, isotropic=isotropic, is_photon=true, bndry_lyr=bndry_lyr)
+      k0 = k_norm_Cart(x0, k0, time0, erg, θm, ωPul, B0, rNS, Mass_NS, Mass_a, melrose=melrose, flat=flat, isotropic=isotropic, is_photon=true, bndry_lyr=bndry_lyr, ax_fix=true)
     end
     if flat
         Mass_NS = 0.0;
@@ -216,8 +218,13 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
     # Define initial conditions so that u0[1] returns a list of x positions (again, 1 entry for each axion trajectory) etc.
     # Δω: relative energy change (is negative)
     u0 = ([x0_pl w0_pl erg .* Δω])
-    #u0 = ([x0_pl w0_pl -erg])
+    # u0 = ([x0_pl w0_pl -erg])
     # u0 = ([x0_pl w0_pl])
+    
+#    if !is_axion
+#        test = hamiltonian(x0_pl, w0_pl .* erg, time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=isotropic, melrose=melrose, zeroIn=false) ./ erg.^2
+#        print("test \t", test, "\t", omP, "\n")
+#    end
     
 
     function out_domain(u, Mvars, lnt)
@@ -225,7 +232,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
         r_s0 = 2.0 * Mass_NS * GNew / c_km^2
         u[u[:, 1] .< rNS, 1] .= rNS
         AA = sqrt.(1.0 .- r_s0 ./ u[:, 1])
-        testCond = (-u[:,7] ./ AA .- GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)) ./ abs.(u[:,7])
+        testCond = (-erg ./ AA .- GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)) ./ erg
         
         if sum(testCond .< 0) .> 0.0
             return true
@@ -250,8 +257,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
       
       # Cut after given amount of crossings
       function condition(u, lnt, integrator)
-        return (log.(GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr))
-                .- log.(Mass_a))[1]
+        return (log.(GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)) .- log.(Mass_a))[1]
       end
       
       callback_count = 0
@@ -313,10 +319,10 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
     
       if is_axion
         cbset = CallbackSet(cb_s) # cb->reflection, cb_->NS, not for axion
-        prob = ODEProblem(rhs, u0, tspan, Mvars, callback=cbset)
+        prob = ODEProblem(rhs, u0, tspan, Mvars, callback=cbset, reltol=1e-5, abstol=ode_err, dtmin=1e-13, force_dtmin=true, maxiters=1e5)
       else
         cbset = CallbackSet(cb_s, cb_r)
-        prob = ODEProblem(rhs, u0, tspan, Mvars, isoutofdomain=out_domain, callback=cbset)
+        prob = ODEProblem(rhs, u0, tspan, Mvars, isoutofdomain=out_domain, callback=cbset, reltol=1e-5, abstol=ode_err, dtmin=1e-13, force_dtmin=true, maxiters=1e5)
       end
 
       # prob = ODEProblem(rhs, u0, tspan, Mvars, callback=cbset)
@@ -328,9 +334,16 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
     end
 
     # Solve the ODEproblem
+    print(Mvars, "\n")
     # sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err, userdata=Dict(:callback_count=>0, :max_count=>max_crossings))
-    sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err, dtmin=1e-13, force_dtmin=true, maxiters=1e5)
-
+    sol = solve(prob, Vern6(), saveat=saveat)
+    # sol = solve(prob, Rosenbrock23(autodiff=false), saveat=saveat, reltol=1e-5, abstol=ode_err, dtmin=1e-13, force_dtmin=true, maxiters=1e5)
+    if (sol.retcode != :Success)&&(sol.retcode != :Terminated)
+        print("problem? \n", x0, "\n", k0, "\n ", omP, "\t", tspan, "\n\n")
+        print(u0, "\t", size(u0), "\t", typeof(u0), "\n")
+        print(sol.u, "\n\n")
+        throw(DomainError())
+    end
 
 
 
@@ -398,40 +411,47 @@ end
 
 function g_schwartz(x0, Mass_NS; rNS=10.0)
     # (1 - r_s / r)
-    # notation (-,+,+,+), upper g^mu^nu
-    
-    r = x0[:,1]
-    
-    # Reduced NS mass is done elsewhere...
-    # Mass_NS = Mass_NS_in .* ones(length(r))
-    # Mass_NS[r .<= rNS] .= Mass_NS_in .* r[r .<= rNS].^3 ./ rNS.^3
-
-
-    # rs = 2 * GNew .* Mass_NS ./ c_km.^2 .* ones(length(x0[:,1]))
-    # suppress GR inside NS
-    # rs[r .<= rNS] .= 0.0
-    rs = ones(eltype(r), size(r)) .* 2 * GNew .* Mass_NS ./ c_km.^2
-    rs[r .<= rNS] .*= (r[r .<= rNS] ./ rNS).^3
-
-    sin_theta = sin.(x0[:,2])
+    # notation (-,+,+,+), defined upper index g^mu^nu
+    if length(size(x0)) > 1
+        rs = 2 * GNew .* Mass_NS ./ c_km.^2 .* ones(length(x0[:,1]))
+        r = x0[:,1]
+        # turn off GR inside NS
+        rs[r .<= rNS] .= 0.0
+        sin_theta = sin.(x0[:,2])
+    else
+        rs = 2 * GNew .* Mass_NS ./ c_km.^2
+        r = x0[1]
+        if r <= rNS
+            rs = 0.0
+        end
+        sin_theta = sin.(x0[2])
+    end
     g_tt = -1.0 ./ (1.0 .- rs ./ r);
     g_rr = (1.0 .- rs ./ r);
     g_thth = 1.0 ./ r.^2; # 1/km^2
     g_pp = 1.0 ./ (r.^2 .* sin_theta.^2); # 1/km^2
+    
 
-  
     return g_tt, g_rr, g_thth, g_pp
     
 end
 
 
 function hamiltonian(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=true, melrose=false, zeroIn=false, bndry_lyr=false)
+    x[x[:,1] .< rNS, 1] .= rNS;
     omP = GJ_Model_ωp_vecSPH(x, time0, θm, ωPul, B0, rNS, zeroIn=zeroIn, bndry_lyr=bndry_lyr);
+    
     g_tt, g_rr, g_thth, g_pp = g_schwartz(x, Mass_NS);
-    ksqr = g_tt .* erg.^2 .+ g_rr .* k[:, 1].^2 .+ g_thth .* k[:, 2].^2 .+ g_pp .* k[:, 3].^2
+    ksqr = 0.0;
+    try
+        ksqr = g_tt .* erg.^2 .+ g_rr .* k[:, 1].^2 .+ g_thth .* k[:, 2].^2 .+ g_pp .* k[:, 3].^2
+    catch
+        ksqr = g_tt .* erg.^2 .+ g_rr .* k[1].^2 .+ g_thth .* k[2].^2 .+ g_pp .* k[3].^2
+    end
     
     if iso
         Ham = 0.5 .* (ksqr .+ omP.^2)
+        # print(time0, "\t", Ham, "\t", omP, "\n\n")
     else
         if !melrose
             ctheta = Ctheta_B_sphere(x, k, [θm, ωPul, B0, rNS, time0, Mass_NS])
@@ -1006,11 +1026,22 @@ function GJ_Model_ωp_vecSPH(x, t, θm, ω, B0, rNS; zeroIn=true, bndry_lyr=fals
     # theta_m angle between B field and rotation axis
     # t [s], omega [1/s]
 
-    r = view(x, :, 1)
+#    xC = spherical_to_cartesian(x)
+#    for i in 1:length(x[:,1])
+#        xC[i, :] .= rotate_y(θR) * xC[i, :]
+#    end
+#    xNew = cartesian_to_spherical(xC)
+    if length(size(x)) > 1
+        r = view(x, :, 1)
+        θ = view(x, :, 2)
+        ϕ = view(x, :, 3)
+    else
+        r = x[1]
+        θ = x[2]
+        ϕ = x[3]
+    end
+
     
-    ϕ = view(x, :, 3)
-    θ = view(x, :, 2)
-    # print(r, "\n")
     ψ = ϕ .- ω.*t
     Bnorm = B0 .* (rNS ./ r).^3 ./ 2
     
@@ -1018,11 +1049,11 @@ function GJ_Model_ωp_vecSPH(x, t, θm, ω, B0, rNS; zeroIn=true, bndry_lyr=fals
     Btheta = Bnorm .* (cos.(θm) .* sin.(θ) .- sin.(θm) .* cos.(θ) .* cos.(ψ))
     Bphi = Bnorm .* sin.(θm) .* sin.(ψ)
     
-    Bx = Br .* sin.(θ) .* cos.(ϕ) .+ Btheta .* cos.(θ) .* cos.(ϕ) .- Bphi .* sin.(ϕ)
-    By = Br .* sin.(θ) .* sin.(ϕ) .+ Btheta .* cos.(θ) .* sin.(ϕ) .+ Bphi .* cos.(ϕ)
+    # Bx = Br .* sin.(θ) .* cos.(ϕ) .+ Btheta .* cos.(θ) .* cos.(ϕ) .- Bphi .* sin.(ϕ)
+    # By = Br .* sin.(θ) .* sin.(ϕ) .+ Btheta .* cos.(θ) .* sin.(ϕ) .+ Bphi .* cos.(ϕ)
     Bz = Br .* cos.(θ) .- Btheta .* sin.(θ)
     
-    nelec = abs.((2.0 .* ω .* Bz) ./ sqrt.(4 .* π ./ 137) .* (1.95e-2) .* hbar) ; # eV^3
+    nelec = abs.((2.0 .* ω .* Bz) ./ sqrt.(4 .* π ./ 137) .* 1.95e-2 .* hbar) ; # eV^3
     ωp = sqrt.(4 .* π .* nelec ./ 137 ./ 5.0e5);
     
     if bndry_lyr
@@ -1289,254 +1320,151 @@ function ωGam(x, k, t, θm, ωPul, B0, rNS, gammaF)
     return ω_final
 end
 
-function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_max=8, batchsize=2, thick_surface=false, iso=false, melrose=false, bndry_lyr=false)
 
-    tt_ax = LinRange(-2*maxR, 2*maxR, ntimes_ax); # Not a real physical time -- just used to get trajectory crossing
-    cxing = nothing
+function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_max=8, batchsize=2, thick_surface=false, iso=false, melrose=false, pre_randomized=nothing, t0=0.0, flat=false, bndry_lyr=false)
     
-    # randomly sample angles θ, ϕ, hit conv surf
-    θi = acos.(1.0 .- 2.0 .* rand(batchsize));
-    ϕi = rand(batchsize) .* 2π;
+    if isnothing(pre_randomized)
+        # ~~~collecting random samples
+        
+        # randomly sample angles θ, ϕ, hit conv surf
+        θi = acos.(1.0 .- 2.0 .* rand());
+        ϕi = rand() .* 2π;
+        
+        # local velocity
+        θi_loc = acos.(1.0 .- 2.0 .* rand());
+        ϕi_loc = rand() .* 2π;
+        
+        # randomly sample x1 and x2 (rotated vectors in disk perpendicular to (r=1, θ, ϕ) with max radius R)
+        ϕRND = rand() .* 2π;
+        
+        # radius on disk
+        # rRND = sqrt.(rand()) .* maxR; # standard flat sampling
+        rRND = rand() .* maxR; # 1/r sampling
+        
+        # ~~~ Done collecting random samples
+    else
+
+        θi = acos.(1.0 .- 2.0 .* pre_randomized[1]);
+        ϕi = pre_randomized[2] .* 2π;
+        
+        # local velocity
+        θi_loc = acos.(1.0 .- 2.0 .* pre_randomized[3]);
+        ϕi_loc = pre_randomized[4] .* 2π;
+        
+        # randomly sample x1 and x2 (rotated vectors in disk perpendicular to (r=1, θ, ϕ) with max radius R)
+        ϕRND = pre_randomized[5] .* 2π;
+        
+        # radius on disk
+        # rRND = sqrt.(pre_randomized[6]) .* maxR; # standard flat sampling
+        rRND = rand() .* pre_randomized[6]; # 1/r sampling
+    end
+    
+    # disk direction
     vvec_all = [sin.(θi) .* cos.(ϕi) sin.(θi) .* sin.(ϕi) cos.(θi)];
     
-    # local velocity
-    θi_loc = acos.(1.0 .- 2.0 .* rand(batchsize));
-    ϕi_loc = rand(batchsize) .* 2π;
+    # vel direction
     vvec_loc = [sin.(θi_loc) .* cos.(ϕi_loc) sin.(θi_loc) .* sin.(ϕi_loc) cos.(θi_loc)];
     
-    # randomly sample x1 and x2 (rotated vectors in disk perpendicular to (r=1, θ, ϕ) with max radius R)
-    ϕRND = rand(batchsize) .* 2π;
-    
-    rRND = sqrt.(rand(batchsize)) .* maxR; # standard flat sampling
-    # rRND = rand(batchsize) .* maxR; # New 1/r sampling
     x1 = rRND .* cos.(ϕRND);
     x2 = rRND .* sin.(ϕRND);
     # rotate using Inv[EurlerMatrix(ϕi, θi, 0)] on vector (x1, x2, 0)
     x0_all= [x1 .* cos.(-ϕi) .* cos.(-θi) .+ x2 .* sin.(-ϕi) x2 .* cos.(-ϕi) .- x1 .* sin.(-ϕi) .* cos.(-θi) x1 .* sin.(-θi)];
-    x_axion = [transpose(x0_all[i,:]) .+ transpose(vvec_all[i,:]) .* tt_ax[:] for i in 1:batchsize];
     
     vIfty = (220.0 .+ rand(batchsize, 3) .* 1.0e-5) ./ sqrt.(3);
     # vIfty = 220.0 .* erfinv.( 2.0 .* rand(batchsize, 3) .- 1.0);
     
     vIfty_mag = sqrt.(sum(vIfty.^2, dims=2));
+    
     gammaA = 1 ./ sqrt.(1.0 .- (vIfty_mag ./ c_km).^2 )
     erg_inf_ini = Mass_a .* sqrt.(1 .+ (vIfty_mag ./ c_km .* gammaA).^2)
-
-    if !thick_surface
-        cxing_st = [get_crossings(log.(GJ_Model_ωp_vec(x_axion[i], 0.0, θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)) .- log.(Mass_a)) for i in 1:batchsize];
-        cxing = [apply(cxing_st[i], tt_ax) for i in 1:batchsize];
-    else
-        
-        for i in 1:batchsize
-            valF, truth_vals, minV = test_on_shell(x_axion[i], vvec_loc[i,:], vIfty_mag[i], 0.0, θm, ωPul, B0, rNS, Mass_NS, Mass_a; iso=iso, melrose=melrose, bndry_lyr=bndry_lyr)
+    Mass_NS = 1.0
+    
+    x0_all .+= vvec_all .* (-maxR)
+    
+    xc = []; yc = []; zc = []
+    
+    # print("\n\n")
+    function condition(u, t, integrator)
+        if !thick_surface
+            return (log.(GJ_Model_ωp_vec(u, t0, θm, ωPul, B0, rNS)) .- log.(Mass_a))[1]
+        else
             
-            cxing_st = [get_crossings(valF, keep_all=true) for i in 1:batchsize];
-            tt_axNew = tt_ax[truth_vals]
-            
-            if isnothing(cxing)
-                cxing = [apply(cxing_st[i], tt_axNew)]
-            else
-                cxing = [cxing; [apply(cxing_st[i], tt_axNew)]]
+            r_s0 = 2.0 * Mass_NS * GNew / c_km^2
+            rr = sqrt.(sum(u.^2))
+            x0_pl = [rr acos.(u[3] ./ rr) atan.(u[2], u[1])]
+            AA = (1.0 .- r_s0 ./ rr)
+            if rr .< rNS
+                AA = 1.0
             end
+            
+  
+            dr_dt = sum(u .* vvec_loc) ./ rr
+            v0_pl = [dr_dt (u[3] .* dr_dt .- rr .* vvec_loc[3]) ./ (rr .* sin.(x0_pl[2])) (-u[2] .* vvec_loc[1] .+ u[1] .* vvec_loc[2]) ./ (rr .* sin.(x0_pl[2])) ];
+            # Switch to celerity in polar coordinates
+            w0_pl = [v0_pl[1] ./ sqrt.(AA)   v0_pl[2] ./ rr .* rr.^2  v0_pl[3] ./ (rr .* sin.(x0_pl[2])) .* (rr .* sin.(x0_pl[2])).^2 ] ./ AA # lower index defined, [eV, eV * km, eV * km]
+            g_tt, g_rr, g_thth, g_pp = g_schwartz(x0_pl, Mass_NS);
+
+            NrmSq = (-erg_inf_ini.^2 .* g_tt .- Mass_a.^2) ./ (w0_pl[1].^2 .* g_rr .+  w0_pl[2].^2 .* g_thth .+ w0_pl[3].^2 .* g_pp )
+            w0_pl .*= sqrt.(NrmSq)
+            
+            omP = GJ_Model_ωp_vec(u, t0, θm, ωPul, B0, rNS)
+            kpar = K_par(x0_pl, w0_pl, [θm, ωPul, B0, rNS, t0, Mass_NS])
+            ksqr = g_tt .* erg_inf_ini.^2 .+ g_rr .* w0_pl[1].^2 .+ g_thth .* w0_pl[2].^2 .+ g_pp .* w0_pl[3].^2
+            Ham = 0.5 .* (ksqr .+ omP.^2 .* (erg_inf_ini.^2 ./ g_rr .- kpar.^2) ./  (erg_inf_ini.^2 ./ g_rr)  ) ./ (erg_inf_ini.^2);
+            
+            return Ham[1]
         end
-        
-     
-        
     end
     
+    function affect!(int)
+        rr = sqrt.(sum(int.u.^2))
+        x0_pl = [rr acos.(int.u[3] ./ rr) atan.(int.u[2], int.u[1])]
+        omP = GJ_Model_ωp_vec(int.u, t0, θm, ωPul, B0, rNS)[1]
+        g_tt, g_rr, g_thth, g_pp = g_schwartz(x0_pl, Mass_NS);
+        ergL = erg_inf_ini ./ sqrt.(g_rr)
+        
+        if (rr .> rNS) && (ergL[1] .> omP)
+            push!( xc, int.u[1] )
+            push!( yc, int.u[2]  )
+            push!( zc, int.u[3]  )
+        end
+    end
     
-    randInx = [rand(1:n_max) for i in 1:batchsize];
+    cb_s = ContinuousCallback(condition, affect!, interp_points=20, abstol=1e-4)
     
-    # see if keep any crossings
-    indx_cx = [if length(cxing[i]) .>= randInx[i] i else -1 end for i in 1:batchsize];
-
-    
-    # remove those which dont
-    randInx = randInx[indx_cx .> 0];
-    indx_cx_cut = indx_cx[indx_cx .> 0];
-
-    cxing_short = [cxing[indx_cx_cut][i][randInx[i]] for i in 1:length(indx_cx_cut)];
-    weights = [length(cxing[indx_cx_cut][i]) for i in 1:length(indx_cx_cut)];
-    
-    
-    numX = length(cxing_short);
-    R_sample = vcat([rRND[indx_cx_cut][i] for i in 1:numX]...);
-    erg_inf_ini = vcat([erg_inf_ini[indx_cx_cut][i] for i in 1:numX]...);
+    function func_line!(du, u, Mvars, t)
+        @inbounds begin
+            kk, v_loc = Mvars
+            du .= kk
+        end
+    end
 
     
-    vvec_loc = vvec_loc[indx_cx_cut, :];
-    vIfty_mag = vcat([vIfty_mag[indx_cx_cut][i] for i in 1:numX]...);
+    # solve differential equation with callback
+    Mvars = [vvec_all, vvec_loc]
     
-    cxing = nothing
-    if numX != 0
-        
-        xpos = [transpose(x0_all[indx_cx_cut[i], :]) .+ transpose(vvec_all[indx_cx_cut[i], :]) .* cxing_short[i] for i in 1:numX];
-        vvec_full = [transpose(vvec_all[indx_cx_cut[i],:]) .* ones(1, 3) for i in 1:numX];
-        
-        
-        t_new_arr = LinRange(- abs.(tt_ax[5] - tt_ax[1]), abs.(tt_ax[5] - tt_ax[1]), 1000);
-        xpos_proj = [xpos[i] .+ vvec_full[i] .* t_new_arr[:] for i in 1:numX];
+    prob = ODEProblem(func_line!, x0_all, (0.0, 2.0*maxR), Mvars, callback=cb_s)
+    sol = solve(prob, Tsit5(), abstol=1e-3, reltol=5e-2)
 
-        
-        if !thick_surface
-            cxing_st = [get_crossings(log.(GJ_Model_ωp_vec(xpos_proj[i], 0.0, θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)) .- log.(Mass_a)) for i in 1:numX];
-            cxing = [apply(cxing_st[i], t_new_arr) for i in 1:numX];
-        else
-            for i in 1:numX
-                valF, truth_vals, minV = test_on_shell(xpos_proj[i], vvec_loc[i,:], vIfty_mag[i], 0.0, θm, ωPul, B0, rNS, Mass_NS, Mass_a; iso=iso, melrose=melrose, bndry_lyr=bndry_lyr)
-                # print("min V: \t", minV, "\n")
-                cxing_st = [get_crossings(valF, keep_all=true) for i in 1:batchsize];
-                tt_axNew = t_new_arr[truth_vals]
-                if isnothing(cxing)
-                    cxing = [apply(cxing_st[i], tt_axNew)]
-                else
-                    cxing = [cxing; [apply(cxing_st[i], tt_axNew)]]
-                end
-            end
-        
-        # cxing_st = [get_crossings(test_on_shell(xpos_proj[i], vvec_loc[i, :], vIfty_mag[i], 0.0,  θm, ωPul, B0, rNS, Mass_NS, Mass_a; iso=iso, melrose=melrose, bndry_lyr=bndry_lyr)) for i in 1:numX];
-        end
     
-        
-        
-        indx_cx = [if length(cxing[i]) .> 0 i else -1 end for i in 1:numX];
-        indx_cx_cut = indx_cx[indx_cx .> 0];
-        R_sample = R_sample[indx_cx_cut];
-        erg_inf_ini = erg_inf_ini[indx_cx_cut];
-        vvec_loc = vvec_loc[indx_cx_cut, :];
-        vIfty_mag = vIfty_mag[indx_cx_cut];
-        
-        numX = length(indx_cx_cut);
-        if numX == 0
-            return 0.0, 0.0, 0, 0.0, 0.0, 0.0
-        end
-
-
-
-        randInx = [rand(1:length(cxing[indx_cx_cut][i])) for i in 1:numX];
-        cxing = [cxing[indx_cx_cut][i][randInx[i]] for i in 1:numX];
-        vvec_flat = reduce(vcat, vvec_full);
-       
-        xpos = [xpos[indx_cx_cut[i],:] .+ vvec_full[indx_cx_cut[i],:] .* cxing[i] for i in 1:numX];
-        vvec_full = [vvec_full[indx_cx_cut[i],:] for i in 1:numX];
-
-        try
-            xpos_flat = reduce(vcat, xpos);
-        catch
-            print("why is this a rare fail? \t", xpos, "\n")
-        end
-   
-        try
-            xpos_flat = reduce(vcat, xpos_flat);
-            vvec_flat = reduce(vcat, vvec_full);
-        catch
-            print("for some reason reduce fail... ", vvec_full, "\t", xpos_flat, "\n")
-            vvec_flat = vvec_full;
-        end
-
-       
-        rmag = sqrt.(sum(xpos_flat .^ 2, dims=2));
-        indx_r_cut = rmag .> rNS; #
-        # print(xpos_flat, "\t", vvec_flat,"\t", R_sample, "\t", indx_r_cut, "\n")
-        if sum(indx_r_cut) - length(xpos_flat[:,1 ]) < 0
-            xpos_flat = xpos_flat[indx_r_cut[:], :]
-            vvec_flat = vvec_flat[indx_r_cut[:], :]
-            R_sample = R_sample[indx_r_cut[:]]
-            erg_inf_ini = erg_inf_ini[indx_r_cut[:]];
-            vvec_loc = vvec_loc[indx_r_cut[:], :];
-            vIfty_mag = vIfty_mag[indx_r_cut[:]];
-        
-            numX = length(xpos_flat);
-            rmag = sqrt.(sum(xpos_flat .^ 2, dims=2));
-        end
-        
-        ntrajs = length(R_sample)
-        if ntrajs == 0
-            return 0.0, 0.0, 0, 0.0, 0.0, 0.0
-        end
-        
-        
-        # Renormalize loc velocity and solve asymptotic
-        
-        vmag_loc = sqrt.(vIfty_mag.^2 .+ 2 .* GNew .* Mass_NS ./ rmag) ./ c_km
-       
-        v0 = vvec_loc .* vmag_loc
-        
-        vIfty = zeros(ntrajs, 3)
-        ϕ = atan.(xpos_flat[:, 2], xpos_flat[:, 1])
-        θ = acos.(xpos_flat[:, 3] ./ rmag)
-       
-        for i in 1:ntrajs
-            for j in 1:3
-                vIfty[i, j] = v_infinity(θ[i], ϕ[i], rmag[i], transpose(v0[i, :]); v_comp=j, Mass_NS=Mass_NS);
-            end
-        end
-        
-        ωpL = GJ_Model_ωp_vec(xpos_flat, zeros(ntrajs), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)
-        if ntrajs > 1
-            vtot = sqrt.(sum(v0.^2, dims=2))
-        else
-            vtot = sqrt.(sum(v0.^2))
-        end
-        gamF = 1 ./ sqrt.(1.0 .- vtot.^2)
-        erg_ax = Mass_a .* sqrt.(1.0 .+ (gamF .* vtot).^2) ;
-        
-
-      
-        # make sure not in forbidden region....
-        fails = ωpL .> erg_ax;
-        n_fails = sum(fails);
-        
-        
-        
-        cxing = nothing;
-        if n_fails > 0
-            try
-                vvec_flat = reduce(vcat, vvec_flat);
-            catch
-                vvec_flat = vvec_flat;
-            end
-            print("fails... \n")
-      
-            if !thick_surface
-                ωpLi2 = [if fails[i] == 1 erg_ax .- GJ_Model_ωp_vec(transpose(xpos_flat[i,:]) .+ transpose(vvec_flat[i,:]) .* t_new_arr[:], [0.0], θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr) else -1 end for i in 1:ntrajs];
-                ωpLi2 = transpose(reduce(vcat, ωpLi2));
-                
-                t_new = [if length(ωpLi2[i]) .> 1 t_new_arr[findall(x->x==ωpLi2[i][ωpLi2[i] .> 0][argmin(ωpLi2[i][ωpLi2[i] .> 0])], ωpLi2[i])][1] else -1e6 end for i in 1:length(ωpLi2)];
-                t_new = t_new[t_new .> -1e6];
-                xpos_flat[fails[:],:] .+= vvec_flat[fails[:], :] .* t_new;
-                
-            else
-                xpos_proj = [transpose(xpos_flat[i,:]) .+ transpose(vvec_flat[i,:]) .* t_new_arr[:] for i in 1:ntrajs];
-                ## FIXING
-                for i in 1:numX
-                    valF, truth_vals, minV = test_on_shell(xpos_proj[i], vvec_loc[i,:], vIfty_mag[i], 0.0, θm, ωPul, B0, rNS, Mass_NS, Mass_a; iso=iso, melrose=melrose, bndry_lyr=bndry_lyr)
-                    cxing_st = [get_crossings(valF, keep_all=true) for i in 1:batchsize];
-                    tt_axNew = t_new_arr[truth_vals]
-                    if isnothing(cxing)
-                        cxing = [apply(cxing_st[i], tt_axNew)]
-                    else
-                        cxing = [cxing; [apply(cxing_st[i], tt_axNew)]]
-                    end
-                end
-                
-                xpos_flat = [xpos_flat[i,:] .+ vvec_flat[i,:] .* cxing[i] for i in 1:ntrajs];
-                try
-                    xpos_flat = reduce(vcat, xpos_flat);
-                catch
-                    xpos_flat = xpos_flat;
-                end
-            end
-            
-        end
-        
-        return xpos_flat, R_sample, ntrajs, weights, v0, vIfty
+    randInx = rand(1:n_max)
+    weights = length(xc)
+    indx = 0
+    
+    if weights .>= randInx
+        indx = randInx
     else
         return 0.0, 0.0, 0, 0.0, 0.0, 0.0
     end
     
-end
+    xpos_flat = [xc[indx] yc[indx] zc[indx]]
+    rmag = sqrt.(sum(xpos_flat.^2))
 
+        
+    vmag_loc = sqrt.(vIfty_mag.^2 .+ 2 .* GNew .* Mass_NS ./ rmag) ./ c_km
+    return xpos_flat, rRND, 1, weights, vvec_loc .* vmag_loc, vIfty ./ c_km
+    
+end
 
 
 end
