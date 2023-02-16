@@ -150,7 +150,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
 
     # propagate photon or axion
     if event.species == "photon"
-      print("propagate photon \n")
+      # print("propagate photon \n")
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose, bndry_lyr]
       x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc = RT.propagate(
@@ -158,7 +158,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
                     ax_num, Mvars, NumerPass, RT.func!,
                     true, false, Mass_a, splittings_cutoff, Δω)
     else
-      print("propagate axion \n")
+      # print("propagate axion \n")
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose, Mass_a, bndry_lyr]
       x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc = RT.propagate(
