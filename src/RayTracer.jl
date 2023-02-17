@@ -115,7 +115,6 @@ function func_axion!(du, u, Mvars, lnt)
               seed(view(u, :, 4:6)  .* erg ), time[1], erg, θm, ωPul,
               B0, rNS, Mass_NS, mass_axion, iso=isotropic, melrose=melrose)) .*
                     c_km .* t .* (g_rr ./ erg);
-        #du[u[:,1] .<= rNS, :] .= 0.0;
         
         
     end
@@ -228,7 +227,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
         AA = sqrt.(abs.(1.0 .- r_s0 ./ u[:, 1]))
         testCond = (-u[:,7] ./ AA .- GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)) ./ abs.(u[:,7] )
 
-        if sum(testCond .< 0) .> 0.0
+        if (sum(testCond .< 0) .> 0.0)||(sum(u[:,1] .<= rNS) .> 0)
             return true
         else
             return false
@@ -425,8 +424,7 @@ function g_schwartz(x0, Mass_NS; rNS=10.0)
     # rs[r .<= rNS] .= 0.0
     rs = ones(eltype(r), size(r)) .* 2 * GNew .* Mass_NS ./ c_km.^2
     # Mass_NS is already re-adjusted in func_axion!...
-    #---rs[r .<= rNS] .*= (r[r .<= rNS] ./ rNS).^3
-
+    rs[r .<= rNS] .*= (r[r .<= rNS] ./ rNS).^3
 
     sin_theta = sin.(x0[:,2])
 
