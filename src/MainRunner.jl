@@ -383,7 +383,8 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     tt_ax_zoom = LinRange(-2*t_diff, 2*t_diff, ntimes_ax);
 
     # define min and max time to propagate photons
-    ln_t_start = -15;
+    # ln_t_start = -15;
+    ln_t_start = -30;
     ln_t_end = log.(1 ./ ωPul);
     NumerPass = [ln_t_start, ln_t_end, ode_err];
     ttΔω = exp.(LinRange(ln_t_start, ln_t_end, ntimes));
