@@ -98,6 +98,8 @@ function func_axion!(du, u, Mvars, lnt)
         
         
         θm, ωPul, B0, rNS, gammaF, time0, Mass_NS, erg, flat, isotropic, melrose, mass_axion = Mvars;
+        # Mass_NS_in = Mass_NS .* ones(length(u[:,1]))
+        # Mass_NS_in[u[:,1] .<= rNS] .= Mass_NS_in .* u[:,1][u[:,1] .<= rNS].^3 ./ rNS.^3
         if flat
             Mass_NS = 0.0;
         end
@@ -115,7 +117,7 @@ function func_axion!(du, u, Mvars, lnt)
               seed(view(u, :, 4:6)  .* erg ), time[1], erg, θm, ωPul,
               B0, rNS, Mass_NS, mass_axion, iso=isotropic, melrose=melrose)) .*
                     c_km .* t .* (g_rr ./ erg);
-        
+        du[:, 7] .= 0.0
         
     end
 end
@@ -389,7 +391,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
     
 
     fail_indx = ones(length(sphere_c[:, 1, end]))
-    fail_indx[sphere_c[:, 1, end] .<= rNS] .= 0.0
+    fail_indx[sphere_c[:, 1, end] .<= (rNS .* 1.01)] .= 0.0
     
     # dxdtau = dxdtau[sphere_c[:, 1, end] .> rNS, :, :]
     # ω_reshaped = ω_reshaped[sphere_c[:, 1, end] .> rNS]
