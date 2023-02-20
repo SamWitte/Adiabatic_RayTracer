@@ -83,7 +83,7 @@ function func!(du, u, Mvars, lnt)
         
         du[:, 4:6] .= -grad(hamiltonian(seed(view(u, :, 1:3)), view(u, :, 4:6) .* erg , time[1], -view(u, :, 7), θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=melrose)) .* c_km .* t .* (g_rr ./ -view(u, :, 7)) ./ erg;
         du[:, 1:3] .= grad(hamiltonian(view(u, :, 1:3), seed(view(u, :, 4:6)  .* erg ), time[1], -view(u, :, 7), θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=melrose)) .* c_km .* t .* (g_rr ./ -view(u, :, 7));
-        du[u[:,1] .<= rNS, :] .= 0.0;
+        du[u[:,1] .<= rNS .* 1.01, :] .= 0.0;
         
         du[:,7 ] .= derivative(tI -> hamiltonian(view(u, :, 1:3), view(u, :, 4:6)  .* erg , tI, -view(u, :, 7), θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=melrose, bndry_lyr=bndry_lyr), time[1])[:] .* t .* (g_rr[:] ./ -view(u, :, 7));
     
@@ -337,14 +337,14 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
 
 
 
-    sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-5, abstol=ode_err,
+    sol = solve(prob, Vern6(), saveat=saveat, reltol=1e-7, abstol=ode_err,
                 dtmin=1e-13, force_dtmin=true, maxiters=1e5)
 
     if (sol.retcode != :Success)&&(sol.retcode != :Terminated)
         print("problem? \n", x0, "\n", k0, "\n ", omP, "\t", tspan, "\n\n")
         print(u0, "\t", size(u0), "\t", typeof(u0), "\n")
         print(sol.u, "\n\n")
-        throw(DomainError())
+        print(sol.retcode, "\n")
     end
 
     for i in 1:length(sol.u)
