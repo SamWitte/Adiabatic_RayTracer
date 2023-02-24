@@ -76,9 +76,10 @@ function get_Prob_nonAD(pos::Array, kpos::Array,
     end
         
     erg_ax = erg_inf_ini ./ sqrt.(1.0 .- 2 * GNew .* Mass_NS ./ rmag ./ c_km.^2 );
-    Mvars =  [θm, ωPul, B0, rNS, [1.0, 1.0], Nc, Mass_NS, flat, isotropic, erg_ax, bndry_lyr]
-    sln_δw, angleVal, k_dot_N, dwdk_snorm, vg_mu, vgN  = RT.dwp_ds(pos, ksphere, Mvars)
-    conversion_F = sln_δw ./  (hbar .* c_km) # 1/km^2;
+    Mvars =  [θm, ωPul, B0, rNS, [1.0, 1.0], Nc, Mass_NS, Mass_a, flat, isotropic, erg_ax, bndry_lyr]
+    sln_δwp, sln_δk, cos_w, vgNorm, dk_vg, dE_vg, k_vg = RT.dwp_ds(pos, ksphere,  Mvars)
+    # sln_δw, angleVal, k_dot_N, dwdk_snorm, vg_mu, vgN  = RT.dwp_ds(pos, ksphere, Mvars)
+    conversion_F = sln_δwp ./  (hbar .* c_km) # 1/km^2;
     
     extra_term = Mass_a.^5 ./ (kmag.^2 .+ Mass_a.^2 .* stheta_B.^2).^2
     Prob_nonAD = π ./ 2 .* (Ax_g .* 1e-9 .* Bmag).^2 .* stheta_B.^2 ./ (conversion_F .* kmag) .* extra_term ./ (c_km .* hbar).^2; #unitless
@@ -507,11 +508,12 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                                 isotropic=isotropic, flat=flat, ax_fix=true)
                                 
         ksphere = RT.k_sphere(xpos_flat, k_init, θm, ωPul, B0, rNS, zeros(batchsize), Mass_NS, flat, bndry_lyr=bndry_lyr)
-        # sln_δw, angleVal = RT.dwp_ds(xpos_flat, ksphere, [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, flat, isotropic, erg_ax])
-        Mvars =  [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, flat, isotropic, erg_ax, bndry_lyr]
-        sln_δw, angleVal, k_dot_N, dwdk_snorm, vg_mu, vgN  = RT.dwp_ds(xpos_flat, ksphere,  Mvars)
-        calpha = cos.(angleVal)
-        weight_angle = abs.(calpha)
+   
+        Mvars =  [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, Mass_a, flat, isotropic, erg_ax, bndry_lyr]
+        sln_δwp, sln_δk, cos_w, vgNorm, dk_vg, dE_vg, k_vg = RT.dwp_ds(xpos_flat, ksphere,  Mvars)
+        # sln_δw, angleVal, k_dot_N, dwdk_snorm, vg_mu, vgN  = RT.dwp_ds(xpos_flat, ksphere,  Mvars)
+        # calpha = cos.(angleVal)
+        # weight_angle = abs.(calpha)
         
         MagnetoVars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                        erg_inf_ini, flat, isotropic, melrose]
@@ -528,7 +530,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         # phaseS = jacVs.*phaseS.*jacobian_GR
         redshift_factor = sqrt.(1.0 .- 2 * GNew .* Mass_NS ./ rmag ./ c_km.^2 );
         phaseS = dense_extra .* (2 .* π .* maxR.^2) .* (rho_DM .* 1e9)  ./ Mass_a .* jacobian_GR
-        sln_prob = abs.(k_dot_N) .* redshift_factor .* phaseS .* (1e5 .^ 2) .* c_km .* 1e5 .*
+        sln_prob = abs.(cos_w) .* redshift_factor .* phaseS .* (1e5 .^ 2) .* c_km .* 1e5 .*
                    mcmc_weights # axions in per second
         # print(sln_prob, "\t", abs.(k_dot_N), "\t", maxR, "\t", jacobian_GR, "\t", dense_extra,  "\n")
         # print(rho_DM, "\t", Mass_a, "\t", mcmc_weights, "\n")
