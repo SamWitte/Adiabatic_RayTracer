@@ -35,7 +35,7 @@ function parse_commandline()
         "--MassA"
             help = "axion mass in eV"
             arg_type = Float64
-            default = 2e-5
+            default = 1e-5
         "--Axg"
             help = "coupling in 1/GeV"
             arg_type = Float64
@@ -123,6 +123,11 @@ function parse_commandline()
                    "random seed"
             arg_type = Int
             default = -1 # random seed
+            
+        "--bndry_lyr"
+            help = "Power law index for small boundary layer of plasma near neutron star. Negative number means don't apply. Should only choose values >> 1.5 in order to not modify the rest of the plasma."
+            arg_type = Int
+            default = -1
     end
 
     return parse_args(s)
@@ -160,12 +165,12 @@ ntimes = 3 # how many points on photon traj to keep
 flat = false; # flat space or schwartzchild
 isotropic = true; # default is anisotropic
 melrose = true; # keep true, more efficient
-bndry_lyr = false # add boundary layer term
+bndry_lyr = parsed_args["bndry_lyr"] # add boundary layer term
 ntimes_ax = 50000; # vector scan for resonance
 vmean_ax = 220.0
 dir_tag = "results"
 rho_DM = 0.45
-thick_surface=false
+thick_surface=true
 n_maxSample=6
 
 print("Axion parameters: ", Mass_a, "\n", Ax_g, "\n")

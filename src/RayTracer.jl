@@ -441,7 +441,7 @@ function g_schwartz(x0, Mass_NS; rNS=10.0)
 end
 
 
-function hamiltonian(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=true, melrose=false, zeroIn=false, bndry_lyr=false)
+function hamiltonian(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=true, melrose=false, zeroIn=false, bndry_lyr=-1)
     x[x[:,1] .< rNS, 1] .= rNS;
     omP = GJ_Model_ωp_vecSPH(x, time0, θm, ωPul, B0, rNS, zeroIn=zeroIn, bndry_lyr=bndry_lyr);
     
@@ -469,7 +469,7 @@ function hamiltonian(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=true, 
     return Ham
 end
 
-function omega_function(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=true, melrose=false, flat=false, zeroIn=false, bndry_lyr=false)
+function omega_function(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=true, melrose=false, flat=false, zeroIn=false, bndry_lyr=-1)
     # if r < rNS, need to not run...
     x[x[:,1] .< rNS, 1] .= rNS;
 
@@ -495,7 +495,7 @@ function omega_function(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=tru
     return sqrt.(Ham)
 end
 
-function test_on_shell(x, v_loc, vIfty_mag, time0, θm, ωPul, B0, rNS, Mass_NS, Mass_a; iso=true, melrose=false, printStuff=false, bndry_lyr=false)
+function test_on_shell(x, v_loc, vIfty_mag, time0, θm, ωPul, B0, rNS, Mass_NS, Mass_a; iso=true, melrose=false, printStuff=false, bndry_lyr=-1)
     # pass cartesian form
     # Define the Schwarzschild radius of the NS (in km)
     r_s0 = 2.0 * Mass_NS * GNew / c_km^2
@@ -547,7 +547,7 @@ function hamiltonian_axion(x, k,  time0, erg, θm, ωPul, B0, rNS,
 end
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-function k_norm_Cart(x0, khat, time0, erg, θm, ωPul, B0, rNS, Mass_NS, Mass_a; melrose=false, flat=false, isotropic=false, ax_fix=false, is_photon=true, bndry_lyr=false)
+function k_norm_Cart(x0, khat, time0, erg, θm, ωPul, B0, rNS, Mass_NS, Mass_a; melrose=false, flat=false, isotropic=false, ax_fix=false, is_photon=true, bndry_lyr=-1)
     
     
     # Switch to polar coordinates
@@ -638,7 +638,7 @@ function solve_vel_CS(θ, ϕ, r, NS_vel; guess=[0.1 0.1 0.1], errV=1e-24, Mass_N
     return soln.zero, accur
 end
 
-function g_det(x0, t, θm, ωPul, B0, rNS, Mass_NS; flat=false, bndry_lyr=false)
+function g_det(x0, t, θm, ωPul, B0, rNS, Mass_NS; flat=false, bndry_lyr=-1)
     # returns determinant of sqrt(-g)
     if flat
         return ones(length(x0[:, 1]))
@@ -758,7 +758,7 @@ function tau_cyc(x0, k0, tarr, Mvars, Mass_a)
 end
 
 # goldreich julian model
-function GJ_Model_vec(x, t, θm, ω, B0, rNS; bndry_lyr=false)
+function GJ_Model_vec(x, t, θm, ω, B0, rNS; bndry_lyr=-1)
     # For GJ model, return \vec{B} and \omega_p [eV]
     # Assume \vec{x} is in spherical coordinates [km], origin at NS, z axis aligned with ω
     # theta_m angle between B field and rotation axis
@@ -786,10 +786,10 @@ function GJ_Model_vec(x, t, θm, ω, B0, rNS; bndry_lyr=false)
 
     # format: [e-, e+] last two -- plasma mass and gamma factor
     
-    if bndry_lyr
+    if bndry_lyr > 0.0
         nelec_pole = abs.((2.0 .* ω .* B0) ./ sqrt.(4 .* π ./ 137) .* (1.95e-2) .* hbar) ; # eV^3
         pole_val = sqrt.(4 .* π .* nelec_pole ./ 137 ./ 5.0e5);
-        ωp[r .>= rNS] .+= pole_val[r .>= rNS] .* (rNS ./ r[r .>= rNS]).^(5.0)
+        ωp[r .>= rNS] .+= pole_val[r .>= rNS] .* (rNS ./ r[r .>= rNS]).^(bndry_lyr)
     end
     
     return [Bx By Bz], ωp
@@ -892,7 +892,7 @@ function spatial_dot(vec1, vec2, ntrajs, x0_pl, Mass_NS)
     return out_v
 end
 
-function k_sphere(x0, k0, θm, ωPul, B0, rNS, time0, Mass_NS, flat; zeroIn=true, bndry_lyr=false)
+function k_sphere(x0, k0, θm, ωPul, B0, rNS, time0, Mass_NS, flat; zeroIn=true, bndry_lyr=-1)
     if flat
         Mass_NS = 0.0;
     end
@@ -975,7 +975,7 @@ function dθdr_proj(x0, k0, Mvars)
 end
 
 # just return net plasma freq
-function GJ_Model_ωp_vec(x, t, θm, ω, B0, rNS; bndry_lyr=false)
+function GJ_Model_ωp_vec(x, t, θm, ω, B0, rNS; bndry_lyr=-1)
     # For GJ model, return \omega_p [eV]
     # Assume \vec{x} is in Cartesian coordinates [km], origin at NS, z axis aligned with ω
     # theta_m angle between B field and rotation axis
@@ -1000,10 +1000,10 @@ function GJ_Model_ωp_vec(x, t, θm, ω, B0, rNS; bndry_lyr=false)
     nelec = abs.((2.0 .* ω .* Bz) ./ sqrt.(4 .* π ./ 137) .* (1.95e-2) .* hbar) ; # eV^3
     ωp = sqrt.(4 .* π .* nelec ./ 137 ./ 5.0e5);
 
-    if bndry_lyr
+    if bndry_lyr > 0
         nelec_pole = abs.((2.0 .* ω .* B0) ./ sqrt.(4 .* π ./ 137) .* (1.95e-2) .* hbar) ; # eV^3
         pole_val = sqrt.(4 .* π .* nelec_pole ./ 137 ./ 5.0e5);
-        ωp[r .>= rNS] .+= pole_val .* (rNS ./ r[r .>= rNS]).^(5.0)
+        ωp[r .>= rNS] .+= pole_val .* (rNS ./ r[r .>= rNS]).^(bndry_lyr)
     end
     
     return ωp
@@ -1024,7 +1024,7 @@ function Dipole_SPH(x, t, θm, ω, B0, rNS)
     return Br, Btheta, Bphi
 end
 
-function GJ_Model_ωp_vecSPH(x, t, θm, ω, B0, rNS; zeroIn=true, bndry_lyr=false)
+function GJ_Model_ωp_vecSPH(x, t, θm, ω, B0, rNS; zeroIn=true, bndry_lyr=-1)
     # For GJ model, return \omega_p [eV]
     # Assume \vec{x} is in Cartesian coordinates [km], origin at NS, z axis aligned with ω
     # theta_m angle between B field and rotation axis
@@ -1060,7 +1060,7 @@ function GJ_Model_ωp_vecSPH(x, t, θm, ω, B0, rNS; zeroIn=true, bndry_lyr=fals
     nelec = abs.((2.0 .* ω .* Bz) ./ sqrt.(4 .* π ./ 137) .* 1.95e-2 .* hbar) ; # eV^3
     ωp = sqrt.(4 .* π .* nelec ./ 137 ./ 5.0e5);
     
-    if bndry_lyr
+    if bndry_lyr > 0
         nelec_pole = abs.((2.0 .* ω .* B0) ./ sqrt.(4 .* π ./ 137) .* (1.95e-2) .* hbar) ; # eV^3
         pole_val = sqrt.(4 .* π .* nelec_pole ./ 137 ./ 5.0e5);
         ωp[r .>= rNS] .+= pole_val .* (rNS ./ r[r .>= rNS]).^(5.0)
@@ -1073,7 +1073,7 @@ function GJ_Model_ωp_vecSPH(x, t, θm, ω, B0, rNS; zeroIn=true, bndry_lyr=fals
     return ωp
 end
 
-function GJ_Model_ωp_scalar(x, t, θm, ω, B0, rNS; bndry_lyr=false)
+function GJ_Model_ωp_scalar(x, t, θm, ω, B0, rNS; bndry_lyr=-1)
     # For GJ model, return \omega_p [eV]
     # Assume \vec{x} is in Cartesian coordinates [km], origin at NS, z axis aligned with ω
     # theta_m angle between B field and rotation axis
@@ -1096,18 +1096,18 @@ function GJ_Model_ωp_scalar(x, t, θm, ω, B0, rNS; bndry_lyr=false)
     nelec = abs.((2.0 .* ω .* Bz) ./ sqrt.(4 .* π ./ 137) .* (1.95e-2) .* hbar) ; # eV^3
     ωp = sqrt.(4 .* π .* nelec ./ 137 ./ 5.0e5);
     
-    if bndry_lyr
+    if bndry_lyr > 0
         nelec_pole = abs.((2.0 .* ω .* B0) ./ sqrt.(4 .* π ./ 137) .* (1.95e-2) .* hbar) ; # eV^3
         pole_val = sqrt.(4 .* π .* nelec_pole ./ 137 ./ 5.0e5);
         if r .>= rNS
-            ωp .+= pole_val .* (rNS ./ r).^(5.0)
+            ωp .+= pole_val .* (rNS ./ r).^(bndry_lyr)
         end
     end
 
     return ωp
 end
 
-function GJ_Model_scalar(x, t, θm, ω, B0, rNS; bndry_lyr=false)
+function GJ_Model_scalar(x, t, θm, ω, B0, rNS; bndry_lyr=-1)
     # For GJ model, return \vec{B} and \omega_p [eV]
     # Assume \vec{x} is in Cartesian coordinates [km], origin at NS, z axis aligned with ω
     # theta_m angle between B field and rotation axis
@@ -1130,11 +1130,11 @@ function GJ_Model_scalar(x, t, θm, ω, B0, rNS; bndry_lyr=false)
     nelec = abs.((2.0 .* ω .* Bz) ./ sqrt.(4 .* π ./ 137) .* (1.95e-2) .* hbar) ; # eV^3
     ωp = sqrt.(4 .* π .* nelec ./ 137 ./ 5.0e5);
     
-    if bndry_lyr
+    if bndry_lyr > 0.0
         nelec_pole = abs.((2.0 .* ω .* B0) ./ sqrt.(4 .* π ./ 137) .* (1.95e-2) .* hbar) ; # eV^3
         pole_val = sqrt.(4 .* π .* nelec_pole ./ 137 ./ 5.0e5);
         if r .>= rNS
-            ωp .+= pole_val .* (rNS ./ r).^(5.0)
+            ωp .+= pole_val .* (rNS ./ r).^(bndry_lyr)
         end
     end
 
@@ -1352,7 +1352,7 @@ function ωGam(x, k, t, θm, ωPul, B0, rNS, gammaF)
 end
 
 
-function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_max=8, batchsize=2, thick_surface=false, iso=false, melrose=false, pre_randomized=nothing, t0=0.0, flat=false, bndry_lyr=false)
+function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_max=8, batchsize=2, thick_surface=false, iso=false, melrose=false, pre_randomized=nothing, t0=0.0, flat=false, bndry_lyr=-1)
     
     if isnothing(pre_randomized)
         # ~~~collecting random samples

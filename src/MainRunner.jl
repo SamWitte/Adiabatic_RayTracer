@@ -331,7 +331,7 @@ end
 
 function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     Ntajs, gammaF; flat=true, isotropic=false, melrose=false,
-    thick_surface=true, bndry_lyr=false,
+    thick_surface=true, bndry_lyr=-1,
     ode_err=1e-6, cutT=100000, fix_time=0.0, CLen_Scale=true, file_tag="",
     ntimes=1000, v_NS=[0 0 0], rho_DM=0.45, vmean_ax=220.0, saveMode=0,
     ntimes_ax=1000, dir_tag="results", n_maxSample=6, iseed=-1,
