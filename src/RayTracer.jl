@@ -1269,6 +1269,12 @@ function dwp_ds(xIn, ksphere, Mvars)
     vgNorm = sqrt.(spatial_dot(v_group, v_group, ntrajs, x0_pl, Mass_NS));
     
     
+    slength = sqrt.(1.0 .+ (omP.^2 ./ ωErg.^2 .* stheta_B.^2 ./ (1.0 .- omP.^2 ./ ωErg.^2 .* ctheta_B.^2) .* (ctheta_B ./stheta_B)  ).^2)
+    if isotropic
+        slength ./= slength
+    end
+    newGuess = (slength ./ vgNorm) .* spatial_dot(ksphere ./ kmag, grad_omega, ntrajs, x0_pl, Mass_NS)
+    
     omp_vg = abs.(spatial_dot(v_group ./ vgNorm, grad_omP_norm, ntrajs, x0_pl, Mass_NS))
     dk_vg = abs.(spatial_dot(v_group ./ vgNorm, gradK_norm, ntrajs, x0_pl, Mass_NS)) # this is group velocity photon to surface normal
     k_vg = abs.(spatial_dot(v_group ./ vgNorm, ksphere ./ kmag, ntrajs, x0_pl, Mass_NS))
@@ -1277,12 +1283,8 @@ function dwp_ds(xIn, ksphere, Mvars)
     
     
     ###
+    return abs.(w_prime), abs.(k_prime), abs.(newGuess), cos_w, vgNorm, dk_vg, dE_vg, k_vg
    
-    if !isotropic
-        return abs.(w_prime), abs.(k_prime), cos_w, vgNorm, dk_vg, dE_vg, k_vg
-    else
-       return abs.(w_prime), abs.(k_prime), cos_w, vgNorm, dk_vg, dE_vg, k_vg
-    end
 end
 
 

@@ -77,12 +77,12 @@ function get_Prob_nonAD(pos::Array, kpos::Array,
         
     erg_ax = erg_inf_ini ./ sqrt.(1.0 .- 2 * GNew .* Mass_NS ./ rmag ./ c_km.^2 );
     Mvars =  [θm, ωPul, B0, rNS, [1.0, 1.0], Nc, Mass_NS, Mass_a, flat, isotropic, erg_ax, bndry_lyr]
-    sln_δwp, sln_δk, cos_w, vgNorm, dk_vg, dE_vg, k_vg = RT.dwp_ds(pos, ksphere,  Mvars)
+    sln_δwp, sln_δk, sln_δE, cos_w, vgNorm, dk_vg, dE_vg, k_vg = RT.dwp_ds(pos, ksphere,  Mvars)
     # sln_δw, angleVal, k_dot_N, dwdk_snorm, vg_mu, vgN  = RT.dwp_ds(pos, ksphere, Mvars)
-    conversion_F = sln_δwp ./  (hbar .* c_km) # 1/km^2;
+    conversion_F = sln_δE .*  (hbar .* c_km) # eV^2;
     
-    extra_term = Mass_a.^5 ./ (kmag.^2 .+ Mass_a.^2 .* stheta_B.^2).^2
-    Prob_nonAD = π ./ 2 .* (Ax_g .* 1e-9 .* Bmag).^2 .* stheta_B.^2 ./ (conversion_F .* kmag) .* extra_term ./ (c_km .* hbar).^2; #unitless
+    # extra_term = Mass_a.^5 ./ (kmag.^2 .+ Mass_a.^2 .* stheta_B.^2).^2
+    Prob_nonAD = π ./ 2 .* (Ax_g .* 1e-9 .* Bmag).^2 .* Mass_a.^2 ./ (conversion_F .* kmag.^2); #unitless
     
 #    vmag = sqrt.(2 * GNew .* Mass_NS ./ rmag) ; # km/s
 #    vmag_tot = sqrt.(vmag .^ 2 .+ vIfty_mag.^2); # km/s
@@ -510,7 +510,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         ksphere = RT.k_sphere(xpos_flat, k_init, θm, ωPul, B0, rNS, zeros(batchsize), Mass_NS, flat, bndry_lyr=bndry_lyr)
    
         Mvars =  [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, Mass_a, flat, isotropic, erg_ax, bndry_lyr]
-        sln_δwp, sln_δk, cos_w, vgNorm, dk_vg, dE_vg, k_vg = RT.dwp_ds(xpos_flat, ksphere,  Mvars)
+        sln_δwp, sln_δk, sln_δE, cos_w, vgNorm, dk_vg, dE_vg, k_vg = RT.dwp_ds(xpos_flat, ksphere,  Mvars)
         # sln_δw, angleVal, k_dot_N, dwdk_snorm, vg_mu, vgN  = RT.dwp_ds(xpos_flat, ksphere,  Mvars)
         # calpha = cos.(angleVal)
         # weight_angle = abs.(calpha)
