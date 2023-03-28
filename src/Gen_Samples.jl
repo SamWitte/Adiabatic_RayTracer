@@ -126,7 +126,7 @@ function parse_commandline()
             
         "--bndry_lyr"
             help = "Power law index for small boundary layer of plasma near neutron star. Negative number means don't apply. Should only choose values >> 1.5 in order to not modify the rest of the plasma."
-            arg_type = Int
+            arg_type = Float64
             default = -1
     end
 
@@ -163,7 +163,7 @@ fix_time = 0.0; # eval at fixed time = 0?
 ode_err = 1e-6; # need strong error
 ntimes = 3 # how many points on photon traj to keep
 flat = false; # flat space or schwartzchild
-isotropic = true; # default is anisotropic
+isotropic = false; # default is anisotropic
 melrose = true; # keep true, more efficient
 bndry_lyr = parsed_args["bndry_lyr"] # add boundary layer term
 ntimes_ax = 50000; # vector scan for resonance
