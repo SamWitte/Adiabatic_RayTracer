@@ -127,7 +127,7 @@ function parse_commandline()
         "--bndry_lyr"
             help = "Power law index for small boundary layer of plasma near neutron star. Negative number means don't apply. Should only choose values >> 1.5 in order to not modify the rest of the plasma."
             arg_type = Float64
-            default = -1
+            default = -1.0
     end
 
     return parse_args(s)
