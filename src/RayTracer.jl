@@ -283,7 +283,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
           push!( yc, ypos )
           push!( zc, zpos )
           push!( tc, exp(i.t) ) # proper time
-          push!( Δωc, (i.u[7]/erg)[1] )
+          push!( Δωc, (i.u[7]/erg[1]) )
           
           #print("Test \t ", i.u, "\t", GJ_Model_ωp_vecSPH(i.u, exp.(i.t), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr), "\t",bndry_lyr,  " ",  (log.(GJ_Model_ωp_vecSPH(i.u, exp.(i.t), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr))
            #     .- log.(Mass_a))[1], "\n")
