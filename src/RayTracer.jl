@@ -790,9 +790,9 @@ function GJ_Model_vec(x, t, θm, ω, B0, rNS; bndry_lyr=-1)
             nelec_pole = abs.((2.0 .* ω .* B0) ./ sqrt.(4 .* π ./ 137) .* (1.95e-2) .* hbar) ; # eV^3
             pole_val = sqrt.(4 .* π .* nelec_pole ./ 137 ./ 5.0e5);
             if bndry_lyr == (1.5)
-                ωp[r .>= rNS] = pole_val[r .>= rNS] .* (rNS ./ r[r .>= rNS]).^(bndry_lyr)
+                ωp[r .>= rNS] .= pole_val .* (rNS ./ r[r .>= rNS]).^(bndry_lyr)
             else
-                ωp[r .>= rNS] .+= pole_val[r .>= rNS] .* (rNS ./ r[r .>= rNS]).^(bndry_lyr)
+                ωp[r .>= rNS] .+= pole_val .* (rNS ./ r[r .>= rNS]).^(bndry_lyr)
             end
                 
         end
@@ -1012,9 +1012,9 @@ function GJ_Model_ωp_vec(x, t, θm, ω, B0, rNS; bndry_lyr=-1)
             pole_val = sqrt.(4 .* π .* nelec_pole ./ 137 ./ 5.0e5);
             
             if bndry_lyr == (1.5)
-                ωp[r .>= rNS] = pole_val[r .>= rNS] .* (rNS ./ r[r .>= rNS]).^(bndry_lyr)
+                ωp[r .>= rNS] .= pole_val .* (rNS ./ r[r .>= rNS]).^(bndry_lyr)
             else
-                ωp[r .>= rNS] .+= pole_val[r .>= rNS] .* (rNS ./ r[r .>= rNS]).^(bndry_lyr)
+                ωp[r .>= rNS] .+= pole_val .* (rNS ./ r[r .>= rNS]).^(bndry_lyr)
             end
         end
     end
@@ -1077,7 +1077,7 @@ function GJ_Model_ωp_vecSPH(x, t, θm, ω, B0, rNS; zeroIn=true, bndry_lyr=-1)
             nelec_pole = abs.((2.0 .* ω .* B0) ./ sqrt.(4 .* π ./ 137) .* (1.95e-2) .* hbar) ; # eV^3
             pole_val = sqrt.(4 .* π .* nelec_pole ./ 137 ./ 5.0e5);
             if bndry_lyr == (1.5)
-                ωp[r .>= rNS] = pole_val .* (rNS ./ r[r .>= rNS]).^(bndry_lyr)
+                ωp[r .>= rNS] .= pole_val .* (rNS ./ r[r .>= rNS]).^(bndry_lyr)
             else
                 ωp[r .>= rNS] .+= pole_val .* (rNS ./ r[r .>= rNS]).^(bndry_lyr)
             end
