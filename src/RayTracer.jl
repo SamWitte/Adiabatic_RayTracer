@@ -1378,6 +1378,183 @@ function ωGam(x, k, t, θm, ωPul, B0, rNS, gammaF)
     return ω_final
 end
 
+function find_samples_new(maxR, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_max=6, batchsize=2, thick_surface=false, iso=false, melrose=false, pre_randomized=nothing, t0=0.0, flat=false, rand_cut=true, bndry_lyr=-1)
+    
+    if isnothing(pre_randomized)
+        # ~~~collecting random samples
+        
+        # randomly sample angles θ, ϕ, hit conv surf
+        θi = acos.(1.0 .- 2.0 .* rand());
+        ϕi = rand() .* 2π;
+        
+        # local velocity
+        θi_loc = acos.(1.0 .- 2.0 .* rand());
+        ϕi_loc = rand() .* 2π;
+        
+        # randomly sample x1 and x2 (rotated vectors in disk perpendicular to (r=1, θ, ϕ) with max radius R)
+        ϕRND = rand() .* 2π;
+        
+        # radius on disk
+        rRND = sqrt.(rand()) .* maxR; # standard flat sampling
+        # rRND = rand() .* maxR; # 1/r sampling
+        
+        # ~~~ Done collecting random samples
+    else
+
+        θi = acos.(1.0 .- 2.0 .* pre_randomized[1]);
+        ϕi = pre_randomized[2] .* 2π;
+        
+        # local velocity
+        θi_loc = acos.(1.0 .- 2.0 .* pre_randomized[3]);
+        ϕi_loc = pre_randomized[4] .* 2π;
+        
+        # randomly sample x1 and x2 (rotated vectors in disk perpendicular to (r=1, θ, ϕ) with max radius R)
+        ϕRND = pre_randomized[5] .* 2π;
+        
+        # radius on disk
+        # rRND = sqrt.(pre_randomized[6]) .* maxR; # standard flat sampling
+        rRND = pre_randomized[6] .* maxR; # 1/r sampling
+        
+        
+    end
+    
+    # disk direction
+    vvec_all = [sin.(θi) .* cos.(ϕi) sin.(θi) .* sin.(ϕi) cos.(θi)];
+    
+    # vel direction
+    vvec_loc = [sin.(θi_loc) .* cos.(ϕi_loc) sin.(θi_loc) .* sin.(ϕi_loc) cos.(θi_loc)];
+    
+    x1 = rRND .* cos.(ϕRND);
+    x2 = rRND .* sin.(ϕRND);
+    # rotate using Inv[EurlerMatrix(ϕi, θi, 0)] on vector (x1, x2, 0)
+    x0_all= [x1 .* cos.(-ϕi) .* cos.(-θi) .+ x2 .* sin.(-ϕi) x2 .* cos.(-ϕi) .- x1 .* sin.(-ϕi) .* cos.(-θi) x1 .* sin.(-θi)];
+    
+    vIfty = (220.0 .+ rand(batchsize, 3) .* 1.0e-5) ./ sqrt.(3);
+    # vIfty = 220.0 .* erfinv.( 2.0 .* rand(batchsize, 3) .- 1.0);
+    # vIfty = erfinv.(2 .* rand(batchsize, 3) .- 1.0) .* vmean_ax .+ v_NS # km /s
+    
+    vIfty_mag = sqrt.(sum(vIfty.^2, dims=2));
+    
+    gammaA = 1 ./ sqrt.(1.0 .- (vIfty_mag ./ c_km).^2 )
+    erg_inf_ini = Mass_a .* sqrt.(1 .+ (vIfty_mag ./ c_km .* gammaA).^2)
+    # Mass_NS = 1.0
+    
+    # print(x0_all, "\t", vvec_all, "\n")
+    x0_all .+= vvec_all .* (-maxR .* 1.1)
+    
+    xc = []; yc = []; zc = []
+    
+    
+    function condition(u, t, integrator)
+        if !thick_surface
+            # print(u, "\t", func_Plasma(u, t0, θm, ωPul, B0, rNS; sphericalX=false, zeroIn=false), "\n")
+            return (log.(GJ_Model_ωp_vec(u, t0, θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)) .- log.(Mass_a))[1]
+            # return (func_Plasma(u, t0, θm, ωPul, B0, rNS; sphericalX=false) .- Mass_a)[1]
+        else
+            
+            r_s0 = 2.0 * Mass_NS * GNew / c_km^2
+            rr = sqrt.(sum(u.^2))
+            x0_pl = [rr acos.(u[3] ./ rr) atan.(u[2], u[1])]
+            AA = (1.0 .- r_s0 ./ rr)
+            if rr .< rNS
+                AA = 1.0
+            end
+            
+  
+            dr_dt = sum(u .* vvec_loc) ./ rr
+            v0_pl = [dr_dt (u[3] .* dr_dt .- rr .* vvec_loc[3]) ./ (rr .* sin.(x0_pl[2])) (-u[2] .* vvec_loc[1] .+ u[1] .* vvec_loc[2]) ./ (rr .* sin.(x0_pl[2])) ];
+            # Switch to celerity in polar coordinates
+            w0_pl = [v0_pl[1] ./ sqrt.(AA)   v0_pl[2] ./ rr .* rr.^2  v0_pl[3] ./ (rr .* sin.(x0_pl[2])) .* (rr .* sin.(x0_pl[2])).^2 ] ./ AA # lower index defined, [eV, eV * km, eV * km]
+            g_tt, g_rr, g_thth, g_pp = g_schwartz(x0_pl, Mass_NS);
+
+            NrmSq = (-erg_inf_ini.^2 .* g_tt .- Mass_a.^2) ./ (w0_pl[1].^2 .* g_rr .+  w0_pl[2].^2 .* g_thth .+ w0_pl[3].^2 .* g_pp )
+            w0_pl .*= sqrt.(NrmSq)
+            
+            omP = GJ_Model_ωp_vec(u, t0, θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)
+            if iso
+                kpar = 0.0
+            else
+                kpar = K_par(x0_pl, w0_pl, [θm, ωPul, B0, rNS, t0, Mass_NS])
+            end
+            ksqr = g_tt .* erg_inf_ini.^2 .+ g_rr .* w0_pl[1].^2 .+ g_thth .* w0_pl[2].^2 .+ g_pp .* w0_pl[3].^2
+            Ham = 0.5 .* (ksqr .+ omP.^2 .* (erg_inf_ini.^2 ./ g_rr .- kpar.^2) ./  (erg_inf_ini.^2 ./ g_rr)  ) ./ (erg_inf_ini.^2);
+            
+            return Ham[1]
+        end
+    end
+    
+    function affect!(int)
+        rr = sqrt.(sum(int.u.^2))
+        x0_pl = [rr acos.(int.u[3] ./ rr) atan.(int.u[2], int.u[1])]
+        omP = GJ_Model_ωp_vec(int.u, t0, θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)[1]
+        g_tt, g_rr, g_thth, g_pp = g_schwartz(x0_pl, Mass_NS);
+        ergL = erg_inf_ini ./ sqrt.(g_rr)
+        
+        if (rr .> rNS) && (ergL[1] .> omP)
+            push!( xc, int.u[1] )
+            push!( yc, int.u[2]  )
+            push!( zc, int.u[3]  )
+        end
+    end
+    
+    cb_s = ContinuousCallback(condition, affect!, interp_points=20, abstol=1e-6)
+    
+    function func_line!(du, u, Mvars, t)
+        @inbounds begin
+            kk, v_loc = Mvars
+            du .= kk
+        end
+    end
+
+    
+    # solve differential equation with callback
+    Mvars = [vvec_all, vvec_loc]
+    prob = ODEProblem(func_line!, x0_all, (0, 2.2*maxR), Mvars, callback=cb_s)
+    # TEST THIS!
+    sol = solve(prob, Euler(), abstol=1e-4, reltol=1e-3, dt=2.0)
+    # sol = solve(prob, Tsit5(), abstol=1e-8, reltol=1e-8)
+    # sol = solve(prob, Tsit5(), abstol=1e-6, reltol=1e-5)
+
+    
+    
+    
+    if length(xc) == 0
+        return 0.0, 0.0, 0, 0.0, 0.0, 0.0
+    end
+    
+    if rand_cut
+        randInx = rand(1:n_max)
+        weights = length(xc)
+        indx = 0
+        
+        
+        if weights .>= randInx
+            indx = randInx
+        else
+            return 0.0, 0.0, 0, 0.0, 0.0, 0.0
+        end
+        
+        xpos_flat = [xc[indx] yc[indx] zc[indx]]
+        rmag = sqrt.(sum(xpos_flat.^2))
+
+            
+        vmag_loc = sqrt.(vIfty_mag.^2 .+ 2 .* GNew .* Mass_NS ./ rmag) ./ c_km
+        
+        return xpos_flat, rRND, 1, weights, vvec_loc .* vmag_loc[1], vIfty ./ c_km
+    else
+        xpos_flat = [xc yc zc]
+        weights = ones(length(xc))
+        rmag = sqrt.(sum(xpos_flat.^2))
+        num_c = length(xc)
+        
+        vmag_loc = sqrt.(vIfty_mag.^2 .+ 2 .* GNew .* Mass_NS ./ rmag) ./ c_km
+        
+        return xpos_flat, rRND .* ones(num_c), num_c, weights, vvec_loc .* vmag_loc, vIfty ./ c_km .* ones(num_c)
+        
+    end
+    
+end
+
 
 function find_samples(maxR, ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_max=8, batchsize=2, thick_surface=false, iso=false, melrose=false, pre_randomized=nothing, t0=0.0, flat=false, bndry_lyr=-1)
     

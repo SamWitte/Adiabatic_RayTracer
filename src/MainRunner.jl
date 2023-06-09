@@ -438,8 +438,8 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         # samples of conversion surface
         
         while !filled_positions
-            xv, Rv, numV, weights, vvec_in, vIfty_in = RT.find_samples(maxR,
-                      ntimes_ax, θm, ωPul, B0, rNS, Mass_a, Mass_NS;
+            xv, Rv, numV, weights, vvec_in, vIfty_in = RT.find_samples_new(maxR,
+                      θm, ωPul, B0, rNS, Mass_a, Mass_NS;
                       n_max=n_maxSample, batchsize=small_batch,
                       thick_surface=thick_surface, iso=isotropic, melrose=false,
                       bndry_lyr=bndry_lyr)
