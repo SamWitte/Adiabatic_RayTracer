@@ -719,6 +719,8 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
 
         end # Batchsize, in any case 1...
 
+      GC.gc() # Manually delete trashed memory
+
     end # while
     
     saveAll[:, 8] ./= float(f_inx) # divide off by N trajectories sampled
