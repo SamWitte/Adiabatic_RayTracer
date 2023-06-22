@@ -19,15 +19,19 @@ function saveNode(f, n)
               string(n.prob), " ", string(n.parent_weight), "\n")
   if length(n.xc) > 0
     for j in 1:length(n.xc)
-      write(f, " ", string(n.xc[j]))
+      write(f, "  ", string(n.xc[j]))
     end
     write(f, "\n")
     for j in 1:length(n.yc)
-       write(f, " ", string(n.yc[j]))
+       write(f, "  ", string(n.yc[j]))
     end
     write(f, "\n")
     for j in 1:length(n.zc)
-       write(f, " ", string(n.zc[j]))            
+       write(f, "  ", string(n.zc[j]))            
+    end
+    write(f, "\n")
+    for j in 1:length(n.tc)
+       write(f, "  ", string(n.tc[j]))            
     end
   else
     write(f, "-\n-\n-")
@@ -35,15 +39,19 @@ function saveNode(f, n)
   write(f, "\n")
   if length(n.traj) > 0
     for j in 1:length(n.traj[:, 1])
-      write(f, " ", string(n.traj[j, 1]))
+      write(f, "  ", string(n.traj[j, 1]))
     end
     write(f, "\n")
     for j in 1:length(n.traj[:, 2])
-      write(f, " ", string(n.traj[j, 2]))
+      write(f, "  ", string(n.traj[j, 2]))
     end
     write(f, "\n")
     for j in 1:length(n.traj[:, 3])
-      write(f, " ", string(n.traj[j, 3]))
+      write(f, "  ", string(n.traj[j, 3]))
+    end
+    write(f, "\n")
+    for j in 1:length(n.times)
+      write(f, "  ", string(n.times[j]))
     end
     write(f, "\n")
   else
@@ -154,7 +162,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
       # print("propagate photon \n")
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose, bndry_lyr]
-      x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc = RT.propagate(
+      x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc,times = RT.propagate(
                     pos0, k0,
                     ax_num, Mvars, NumerPass, RT.func!,
                     true, false, Mass_a, splittings_cutoff, Δω)
@@ -162,7 +170,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
       # print("propagate axion \n")
       Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
                [erg_inf_ini], flat, isotropic, melrose, Mass_a, bndry_lyr]
-      x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc = RT.propagate(
+      x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc,times = RT.propagate(
                         pos0, k0,
                         ax_num, Mvars, NumerPass, RT.func_axion!,
                         true, true, Mass_a, splittings_cutoff, Δω)
@@ -173,6 +181,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     event.traj = pos
     event.mom = kpos
     event.erg = transpose(t_e[1, :])
+    event.times = times
    
     if length(xc) < 1  # No crossings
         # Since we are considering the most probable first
@@ -353,7 +362,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
     batchsize=1
     saveAll = nothing
 
-    if saveMode <= 3 
+    if saveMode < 3 
       ntimes = 3 # Times to store in ODE
     end
 
@@ -506,7 +515,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         k_init = RT.k_norm_Cart(xpos_flat, velNorm_flat,  0.0, erg_inf_ini, θm,
                                 ωPul, B0, rNS, Mass_NS, Mass_a, melrose=melrose,
                                 isotropic=isotropic, flat=flat, ax_fix=true)
-                                
+        
         ksphere = RT.k_sphere(xpos_flat, k_init, θm, ωPul, B0, rNS, zeros(batchsize), Mass_NS, flat, bndry_lyr=bndry_lyr)
    
         Mvars =  [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, Mass_a, flat, isotropic, erg_ax, bndry_lyr]

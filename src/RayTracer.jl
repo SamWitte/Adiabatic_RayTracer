@@ -152,6 +152,7 @@ mutable struct node
   traj    # Used to store entire trajectory
   mom    # Used to store entire momentum
   erg
+  times
 end
 # Constructor
 node(x0=0.,y0=0.,z0=0.,kx0=0.,ky0=0.,kz0=0.,t0=0.,Δω0=-1.0,
@@ -159,7 +160,7 @@ node(x0=0.,y0=0.,z0=0.,kx0=0.,ky0=0.,kz0=0.,t0=0.,Δω0=-1.0,
      weight0=0.,parent_weight0=0.,prob_conv=0.,prob_conv0=0.) = node(
       x0,y0,z0,kx0,ky0,kz0,t0,Δω0,species0,
       prob0,weight0,parent_weight0,prob_conv,prob_conv0,
-      [],[],[],[],[],[],[],[],[],false,[],[],[])
+      [],[],[],[],[],[],[],[],[],false,[],[],[],[])
 #node(x=0.,y=0.,z=0.,kx=0.,ky=0.,kz=0.,t=0.,species="axion",prob=0.,weight=0.,
 #     parent_weight=0.,xc=[],yc=[],zc=[],kxc=[],kyc=[],kzc=[],tc=[],Pc=[],
 #    is_final=false,traj=[],mom=[]) = node(x,y,z,kx,ky,kz,t,species,prob,weight,
@@ -250,8 +251,49 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
       
       # Cut after given amount of crossings
       function condition(u, lnt, integrator)
-        return (GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)
+        thick_surface = true # TODO: Make as input parameter in propagate
+        if !thick_surface
+          return (GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)
                 .- Mass_a)[1]
+        else
+
+          
+          x0_pl = [u[1] u[2] u[3]]
+          w0_pl = [u[4] u[5] u[6]]
+          #v0_pl = v0_pl ./ u[4]
+          rr = u[1]
+          erg_inf = u[7]
+          t0 = exp.(lnt)
+
+          r_s0 = 2.0 * Mass_NS * GNew / c_km^2
+          
+          AA = (1.0 .- r_s0 ./ rr)
+          if rr .< rNS
+                AA = 1.0
+            end
+          
+          #w0_pl = [v0_pl[:, 1] ./ sqrt.(AA)   v0_pl[:, 2] ./ rr .* rr.^2  v0_pl[:, 3] ./ (rr .* sin.(x0_pl[:, 2])) .* (rr .* sin.(x0_pl[:, 2])).^2 ] ./ AA 
+          #w0_pl .*= 1.0 ./ erg           
+
+          g_tt, g_rr, g_thth, g_pp = g_schwartz(x0_pl, Mass_NS);
+
+          NrmSq = (-erg_inf.^2 .* g_tt .- Mass_a.^2) ./ (w0_pl[:, 1].^2 .* g_rr .+  w0_pl[:, 2].^2 .* g_thth .+ w0_pl[:, 3].^2 .* g_pp )
+          w0_pl .*= sqrt.(NrmSq)
+          
+          omP = GJ_Model_ωp_vecSPH(u, exp.(lnt), θm, ωPul, B0, rNS, bndry_lyr=bndry_lyr)
+          
+          if isotropic
+              kpar = 0.0
+          else
+              kpar = K_par(x0_pl, w0_pl, [θm, ωPul, B0, rNS, t0, Mass_NS])
+          end
+          ksqr = g_tt .* erg_inf.^2 .+ g_rr .* w0_pl[:, 1].^2 .+ g_thth .* w0_pl[:, 2].^2 .+ g_pp .* w0_pl[:, 3].^2
+          Ham = 0.5 .* (ksqr .+ omP.^2 .* (erg_inf.^2 ./ g_rr .- kpar.^2) ./  (erg_inf.^2 ./ g_rr)  ) ./ (erg_inf.^2);
+          
+          #print("  : ", u[1:3], " " , w0_pl, " ", exp.(lnt), " ", θm, " ", ωPul, " ", B0, " ", rNS, " ")  
+          #print(Ham[1], "\n")  
+          return Ham[1]
+        end
       end
       
       callback_count = 0
@@ -317,7 +359,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
     
       if is_axion
         cbset = CallbackSet(cb_s) # cb->reflection, cb_->NS, not for axion
-        prob = ODEProblem(rhs, u0, tspan, Mvars, callback=cbset, reltol=1e-5, abstol=ode_err, dtmin=1e-13, force_dtmin=true, maxiters=1e5)
+        prob = ODEProblem(rhs, u0, tspan, Mvars, callback=cbset)
       else
         cbset = CallbackSet(cb_s, cb_r)
 
@@ -402,7 +444,7 @@ function propagate(x0::Matrix, k0::Matrix,  nsteps, Mvars, NumerP, rhs=func!,
     
    
     if make_tree
-      return x_reshaped,v_reshaped,dt,fail_indx,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc,node
+      return x_reshaped,v_reshaped,dt,fail_indx,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc,times
     else
       return x_reshaped,v_reshaped,dt,fail_indx
     end
@@ -421,12 +463,12 @@ function g_schwartz(x0, Mass_NS; rNS=10.0)
     # Mass_NS[r .<= rNS] .= Mass_NS_in .* r[r .<= rNS].^3 ./ rNS.^3
 
 
-    # rs = 2 * GNew .* Mass_NS ./ c_km.^2 .* ones(length(x0[:,1]))
+    rs = 2 * GNew .* Mass_NS ./ c_km.^2 .* ones(length(x0[:,1]))
     # suppress GR inside NS
     # rs[r .<= rNS] .= 0.0
-    rs = ones(eltype(r), size(r)) .* 2 * GNew .* Mass_NS ./ c_km.^2
+    #rs = ones(eltype(r), size(r)) .* 2 * GNew .* Mass_NS ./ c_km.^2
     # Mass_NS is already re-adjusted in func_axion!...
-    rs[r .<= rNS] .*= (r[r .<= rNS] ./ rNS).^3
+    #rs[r .<= rNS] .*= (r[r .<= rNS] ./ rNS).^3
 
     sin_theta = sin.(x0[:,2])
 
@@ -435,6 +477,9 @@ function g_schwartz(x0, Mass_NS; rNS=10.0)
     g_thth = 1.0 ./ r.^2; # 1/km^2
     g_pp = 1.0 ./ (r.^2 .* sin_theta.^2); # 1/km^2
     
+    rs = 2 * GNew .* Mass_NS ./ c_km.^2 .* ones(length(x0[:,1]))
+    g_tt[r .<= rNS] = -4 ./ (3 .* sqrt.(1 .- rs[r .<= rNS] / rNS) .- sqrt.(1 .- r[r .<= rNS].^2 .* rs[r .<= rNS]./rNS.^3) ).^2
+    g_rr[r .<= rNS] = (1 .- r[r .<= rNS].^2 .* rs[r .<= rNS]./rNS.^3)
 
     return g_tt, g_rr, g_thth, g_pp
     
