@@ -485,6 +485,32 @@ function g_schwartz(x0, Mass_NS; rNS=10.0)
     
 end
 
+function Cristoffel(x0_pl, time0, θm, ωPul, B0, rNS, Mass_NS; flat=false)
+    if flat
+        MassNS = 0.0
+    else
+        MassNS = Mass_NS
+    end
+    r = x0_pl[1]
+    theta = x0_pl[2]
+    
+    GM = GNew .* Mass_NS ./ c_km.^2
+    G_rrr = - GM ./ (r .* (r .- 2 .* GM))
+    G_rtt = - (r - 2 .* GM)
+    G_rpp = - (r - 2 .* GM) .* sin.(theta).^2
+    G_trt = 1.0 ./ r
+    G_tpp = -sin.(theta) .* cos.(theta)
+    G_prp = 1.0 ./ r
+    G_ptp = cos.(theta) ./ sin.(theta)
+    
+    G_ttr = 1.0 ./ r
+    G_ppr = 1.0 ./ r
+    G_ppt = cos.(theta) ./ sin.(theta)
+    
+    return G_rrr, G_rtt, G_rpp, G_trt, G_tpp, G_prp, G_ptp, G_ttr, G_ppr, G_ppt
+    # return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+end
+
 
 function hamiltonian(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=true, melrose=false, zeroIn=false, bndry_lyr=-1)
     x[x[:,1] .< rNS, 1] .= rNS;
@@ -514,7 +540,7 @@ function hamiltonian(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=true, 
     return Ham
 end
 
-function omega_function(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=true, melrose=false, flat=false, zeroIn=false, bndry_lyr=-1)
+function omega_function(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; kmag=nothing, cthetaB=nothing, iso=true, melrose=false, flat=false, zeroIn=false, bndry_lyr=-1)
     # if r < rNS, need to not run...
     x[x[:,1] .< rNS, 1] .= rNS;
 
@@ -522,11 +548,18 @@ function omega_function(x, k,  time0, erg, θm, ωPul, B0, rNS, Mass_NS; iso=tru
     
     g_tt, g_rr, g_thth, g_pp = g_schwartz(x, Mass_NS);
     ksqr = 0.0;
-    try
-        ksqr = g_rr .* k[:, 1].^2 .+ g_thth .* k[:, 2].^2 .+ g_pp .* k[:, 3].^2
-    catch
-        ksqr = g_rr .* k[1].^2 .+ g_thth .* k[2].^2 .+ g_pp .* k[3].^2
+    
+    if isnothing(kmag)
+        try
+            ksqr = g_rr .* k[:, 1].^2 .+ g_thth .* k[:, 2].^2 .+ g_pp .* k[:, 3].^2
+        catch
+            ksqr = g_rr .* k[1].^2 .+ g_thth .* k[2].^2 .+ g_pp .* k[3].^2
+        end
+        
+    else
+        ksqr = kmag.^2
     end
+
     
     if iso
         Ham = (ksqr .+ omP.^2)
@@ -1235,7 +1268,7 @@ end
 
 
 
-function GJ_Model_Sphereical(x, t, θm, ω, B0, rNS; Mass_NS=1.0, flat=false, sphericalX=false)
+function GJ_Model_Sphereical(x, t, θm, ω, B0, rNS; Mass_NS=1.0, flat=false, sphericalX=false, return_comp=-1)
     # For GJ model, return \vec{B} and \omega_p [eV]
     # Assume \vec{x} is in spherical coordinates [km], origin at NS, z axis aligned with ω
     # theta_m angle between B field and rotation axis
@@ -1264,7 +1297,17 @@ function GJ_Model_Sphereical(x, t, θm, ω, B0, rNS; Mass_NS=1.0, flat=false, sp
     x0_pl = [r θ ϕ]
   
     g_tt, g_rr, g_thth, g_pp = g_schwartz(x0_pl, Mass_NS)
-    return [Br ./ sqrt.(g_rr) Btheta ./ sqrt.(g_thth)  Bphi ./ sqrt.(g_pp)] # lower?
+    if return_comp == -1
+        return [Br ./ sqrt.(g_rr) Btheta ./ sqrt.(g_thth)  Bphi ./ sqrt.(g_pp)] # lower
+    elseif return_comp == 0
+        return sqrt.(Br.^2 .+ Btheta.^2 .+ Bphi.^2) * 1.95e-2
+    elseif return_comp == 1
+        return Br ./ sqrt.(g_rr) .* g_rr * 1.95e-2 # this is for d_mu B^i
+    elseif return_comp == 2
+        return Btheta ./ sqrt.(g_thth) .* g_thth * 1.95e-2
+    elseif return_comp == 3
+        return Bphi ./ sqrt.(g_pp) .* g_pp * 1.95e-2
+    end
 
 end
 
@@ -1336,7 +1379,8 @@ function dwp_ds(xIn, ksphere, Mvars)
    
     
     # group velocity
-    v_group = grad(omega_function(x0_pl, seed(ksphere), t_start, -erg_inf_ini, θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=true)) #
+    v_group = grad(omega_function(x0_pl, seed(ksphere), t_start, -erg_inf_ini, θm, ωPul, B0, rNS, Mass_NS, iso=isotropic, melrose=true))
+    
     v_group[:, 1] ./= g_rr
     v_group[:, 2] ./= g_thth
     v_group[:, 3] ./= g_pp
@@ -1359,6 +1403,76 @@ function dwp_ds(xIn, ksphere, Mvars)
     ###
     return abs.(w_prime), abs.(k_prime), abs.(newGuess), cos_w, vgNorm, dk_vg, dE_vg, k_vg
    
+end
+
+function conversion_prob(Ax_g, x0_pl, Mvars, local_vars; one_D=false)
+    
+    # xIn cartesian, ksphere [spherical]
+    θm, ωPul, B0, rNS, gammaF, t_start, Mass_NS, Mass_a, flat, isotropic, ωErg, bndry_lyr = Mvars
+    ωp, Bsphere, Bmag, ksphere, kmag, vgNorm, ctheta_B, stheta_B = local_vars
+    vloc = sqrt.(ωErg.^2 .- Mass_a.^2) ./ ωErg
+    
+
+    
+    ntrajs = length(t_start)
+    rr = x0_pl[:, 1]
+    
+    erg_inf_ini = sqrt.(1.0 .- 2.0 .* GNew .* Mass_NS ./ rr ./ c_km.^2) .* ωErg
+    g_tt, g_rr, g_thth, g_pp = g_schwartz(x0_pl, Mass_NS);
+    
+    if isotropic
+        dmu_E = grad(omega_function(seed(x0_pl), ksphere, t_start, erg_inf_ini, θm, ωPul, B0, rNS, Mass_NS, kmag=kmag, cthetaB=ctheta_B, iso=isotropic, flat=flat, melrose=true)) # based on energy gradient
+        dmu_E_2 = dmu_E
+    else
+        G_rrr, G_rtt, G_rpp, G_trt, G_tpp, G_prp, G_ptp, G_ttr, G_ppr, G_ppt = Cristoffel(x0_pl, t_start, θm, ωPul, B0, rNS, Mass_NS; flat=flat)
+        rs = 2 * GNew .* Mass_NS ./ c_km.^2
+        
+        dmu_omP = grad(GJ_Model_ωp_vecSPH(seed(x0_pl), t_start, θm, ωPul, B0, rNS, zeroIn=true, bndry_lyr=bndry_lyr))
+
+        dmu_B = grad(GJ_Model_Sphereical(seed(x0_pl), t_start, θm, ωPul, B0, rNS; Mass_NS=Mass_NS, flat=flat, sphericalX=true, return_comp=0))
+        # dmu_B = grad(func_BField(seed(x0_pl), t_start, θm, ωPul, B0, rNS; Mass_NS=Mass_NS, flat=flat, sphericalX=true, return_comp=0))
+  
+        term1 = ksphere[1] .* grad(GJ_Model_Sphereical(seed(x0_pl), t_start, θm, ωPul, B0, rNS; Mass_NS=Mass_NS, flat=flat, sphericalX=true, return_comp=1)) .+ ksphere[2] .* grad(GJ_Model_Sphereical(seed(x0_pl), t_start, θm, ωPul, B0, rNS; Mass_NS=Mass_NS, flat=flat, sphericalX=true, return_comp=2)) .+ ksphere[3] .* grad(GJ_Model_Sphereical(seed(x0_pl), t_start, θm, ωPul, B0, rNS; Mass_NS=Mass_NS, flat=flat, sphericalX=true, return_comp=3))
+        
+        term2_r = ksphere[1] .* (g_rr .* Bsphere[1] .* 1.95e-2) .* G_rrr .+ ksphere[2] .* G_trt .* (Bsphere[2] .* g_thth .* 1.95e-2) .+ ksphere[3] .* G_prp .* (Bsphere[3] .* g_pp .* 1.95e-2)
+        term2_t = ksphere[1] .* (g_thth .* Bsphere[2] .* 1.95e-2) .* G_rtt .+ ksphere[3] .* G_ptp .* (Bsphere[3] .* g_pp .* 1.95e-2) .+ ksphere[2] .* (g_rr .* Bsphere[1] .* 1.95e-2) .* G_ttr
+        term2_p =  ksphere[1] .* (g_pp .* Bsphere[3] .* 1.95e-2) .* G_rpp .+ ksphere[2] .* G_tpp .* (Bsphere[3] .* g_pp .* 1.95e-2) .+ ksphere[3] .* G_ppr .* (Bsphere[1] .* g_rr .* 1.95e-2) .+ ksphere[3] .* G_ppt .* (Bsphere[2] .* g_thth .* 1.95e-2)
+        
+        dmu_ctheta = (term1 .+ [term2_r term2_t term2_p]) ./ (kmag .* Bmag) .- ctheta_B .* dmu_B ./ Bmag
+        
+        v_group = grad(omega_function(x0_pl, seed(ksphere), t_start, -erg_inf_ini, θm, ωPul, B0, rNS, Mass_NS, flat=flat, iso=isotropic, melrose=true)) #
+        term2_r = G_rrr .* ksphere[1] .* (g_rr .* v_group[1]) .+ G_trt .* ksphere[2] .* (g_thth .* v_group[2]) .+ G_prp .* ksphere[3] .* (g_pp .* v_group[3])
+        term2_t = G_rtt .* ksphere[1] .* (g_thth .* v_group[2]) .+ G_ptp .* ksphere[3] .* (g_pp .* v_group[3]) .+ G_ttr .* ksphere[2] .* (g_rr .* v_group[1])
+        term2_p = G_rpp .* ksphere[1] .* (g_pp .* v_group[3]) .+ G_tpp .* ksphere[2] .* (g_pp .* v_group[3]) .+ G_ppr .* ksphere[3] .* (g_rr .* v_group[1]) .+ G_ppt .* ksphere[3] .* (g_thth .* v_group[2])
+        
+        term2 = [term2_r term2_t term2_p]
+       
+        
+        preF = ωp ./ abs.(ωErg.^5 .+ ctheta_B.^2 .* ωErg .* (ωp.^4 .- 2 .* ωp.^2 .* ωErg.^2))
+        dmu_E = preF .* (ωErg.^4 .* stheta_B.^2 .* dmu_omP .- ωErg.^2 .* ctheta_B .* ωp .* (ωErg.^2 .- ωp.^2) .* dmu_ctheta)
+        
+        dmu_E_2 = dmu_E .+ term2
+        vhat_gradE = spatial_dot(-2.0 .* ksphere ./ kmag, dmu_E, ntrajs, x0_pl, Mass_NS)
+        # vhat_gradE_2 = spatial_dot(-2.0 .* ksphere ./ kmag, dmu_E_2, ntrajs, x0_pl, Mass_NS)
+    end
+    
+    gradE_norm = dmu_E ./ sqrt.(g_rr .* dmu_E[:, 1].^2  .+ g_thth .* dmu_E[:, 2].^2 .+ g_pp .* dmu_E[:, 3].^2)
+    gradE_norm_2 = dmu_E_2 ./ sqrt.(g_rr .* dmu_E_2[:, 1].^2  .+ g_thth .* dmu_E_2[:, 2].^2 .+ g_pp .* dmu_E_2[:, 3].^2)
+    cos_w = abs.(spatial_dot(ksphere ./ kmag, gradE_norm, ntrajs, x0_pl, Mass_NS))
+    cos_w_2 = abs.(spatial_dot(ksphere ./ kmag, gradE_norm_2, ntrajs, x0_pl, Mass_NS))
+    vhat_gradE = spatial_dot(ksphere ./ kmag, dmu_E, ntrajs, x0_pl, Mass_NS)
+    grad_Emag = spatial_dot(dmu_E, dmu_E, ntrajs, x0_pl, Mass_NS)
+    grad_Emag_2 = spatial_dot(dmu_E_2, dmu_E_2, ntrajs, x0_pl, Mass_NS)
+    
+    if one_D
+        Prob = π ./ 2.0 .* (Ax_g .* 1e-9 .* Bmag).^2  ./ (vloc .* (abs.(vhat_gradE) .* c_km .* hbar)) #
+    else
+        prefactor = ωErg.^4 .* stheta_B.^2 ./ (ctheta_B.^2 .* ωp.^2 .* (ωp.^2 .- 2 .* ωErg .^2) .+ ωErg.^4)
+        Prob = π ./ 2.0 .* prefactor .* (Ax_g .* 1e-9 .* Bmag).^2 ./ (abs.(vhat_gradE) .* vloc .* c_km .* hbar)  # jamies paper
+        # Prob = π ./ 2.0 .* prefactor .* (Ax_g .* 1e-9 .* Bmag).^2 ./ (abs.(vhat_gradE_2) .* vloc .* c_km .* hbar)  # jamies paper
+    end
+    # print(x0_pl, "\t", ksphere, "\t", vhat_gradE, "\t", Prob, "\n")
+    return Prob, abs.(vhat_gradE), abs.(cos_w), sqrt.(grad_Emag), abs.(cos_w_2), sqrt.(grad_Emag_2)
 end
 
 

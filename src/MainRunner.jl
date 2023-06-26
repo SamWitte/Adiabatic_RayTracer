@@ -71,8 +71,9 @@ function get_Prob_nonAD(pos::Array, kpos::Array,
     rmag = sqrt.(sum(pos.^ 2, dims=2));
     theta_sf = acos.(pos[:,3] ./ rmag)
     x0_pl = [rmag theta_sf atan.(pos[:,2], pos[:,1])]
-  
-    Bsphere = RT.GJ_Model_Sphereical(pos, Nc, θm, ωPul, B0, rNS; Mass_NS=Mass_NS, flat=flat)
+    t_start = zeros(Nc)
+    g_tt, g_rr, g_thth, g_pp = RT.g_schwartz(x0_pl, Mass_NS);
+    Bsphere = RT.GJ_Model_Sphereical(pos, t_start, θm, ωPul, B0, rNS; Mass_NS=Mass_NS, flat=flat)
     ksphere = RT.k_sphere(pos, kpos, θm, ωPul, B0, rNS, Nc, Mass_NS, flat, bndry_lyr=bndry_lyr)
     Bmag = sqrt.(RT.spatial_dot(Bsphere, Bsphere, Nc, x0_pl, Mass_NS)) .* 1.95e-2; # eV^2
     kmag = sqrt.(RT.spatial_dot(ksphere, ksphere, Nc, x0_pl, Mass_NS));
@@ -82,15 +83,28 @@ function get_Prob_nonAD(pos::Array, kpos::Array,
         ctheta_B .*= 0.0
         stheta_B ./= stheta_B
     end
+    
+    v_group = RT.grad(RT.omega_function(x0_pl, RT.seed(ksphere), t_start, -erg_inf_ini, θm, ωPul, B0, rNS, Mass_NS, flat=flat, iso=isotropic, melrose=true))
+    
+    v_group[:, 1] ./= g_rr
+    v_group[:, 2] ./= g_thth
+    v_group[:, 3] ./= g_pp
+    vgNorm = sqrt.(RT.spatial_dot(v_group, v_group, Nc, x0_pl, Mass_NS));
         
     erg_ax = erg_inf_ini ./ sqrt.(1.0 .- 2 * GNew .* Mass_NS ./ rmag ./ c_km.^2 );
-    Mvars =  [θm, ωPul, B0, rNS, [1.0, 1.0], Nc, Mass_NS, Mass_a, flat, isotropic, erg_ax, bndry_lyr]
-    sln_δwp, sln_δk, sln_δE, cos_w, vgNorm, dk_vg, dE_vg, k_vg = RT.dwp_ds(pos, ksphere,  Mvars)
+    Mvars =  [θm, ωPul, B0, rNS, [1.0, 1.0], t_start, Mass_NS, Mass_a, flat, isotropic, erg_ax, bndry_lyr]
+    # sln_δwp, sln_δk, sln_δE, cos_w, vgNorm, dk_vg, dE_vg, k_vg = RT.dwp_ds(pos, ksphere,  Mvars)
     # sln_δw, angleVal, k_dot_N, dwdk_snorm, vg_mu, vgN  = RT.dwp_ds(pos, ksphere, Mvars)
+    
+    ωp = RT.GJ_Model_ωp_vecSPH(x0_pl, t_start, θm, ωPul, B0, rNS, zeroIn=true, bndry_lyr=bndry_lyr)
+    local_vars = [ωp, Bsphere, Bmag, ksphere, kmag, vgNorm, ctheta_B, stheta_B]
+    Prob_nonAD, sln_δE, cos_w, grad_Emag, cos_w_2, grad_Emag_2 = RT.conversion_prob(Ax_g, x0_pl, Mvars, local_vars, one_D=false)
+    # print(Prob_nonAD,"\n")
     conversion_F = sln_δE .*  (hbar .* c_km) # eV^2;
     
-    # extra_term = Mass_a.^5 ./ (kmag.^2 .+ Mass_a.^2 .* stheta_B.^2).^2
-    Prob_nonAD = π ./ 2 .* (Ax_g .* 1e-9 .* Bmag).^2 .* Mass_a.^2 ./ (conversion_F .* kmag.^2); #unitless
+    return Prob_nonAD
+#    # extra_term = Mass_a.^5 ./ (kmag.^2 .+ Mass_a.^2 .* stheta_B.^2).^2
+#    # Prob_nonAD = π ./ 2 .* (Ax_g .* 1e-9 .* Bmag).^2 .* Mass_a.^2 ./ (conversion_F .* kmag.^2); #unitless
     
 #    vmag = sqrt.(2 * GNew .* Mass_NS ./ rmag) ; # km/s
 #    vmag_tot = sqrt.(vmag .^ 2 .+ vIfty_mag.^2); # km/s
