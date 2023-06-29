@@ -456,7 +456,21 @@ function g_schwartz(x0, Mass_NS; rNS=10.0)
 
     # notation (-,+,+,+), upper g^mu^nu
     
-    r = x0[:,1]
+    if length(size(x0)) > 1
+        r = x0[:,1]
+        rs = ones(eltype(r), size(r)) .* 2 * GNew .* Mass_NS ./ c_km.^2
+        rs[r .<= rNS] .*= (r[r .<= rNS] ./ rNS).^3
+        sin_theta = sin.(x0[:,2])
+    else
+        rs = 2 * GNew .* Mass_NS ./ c_km.^2
+        r = x0[1]
+        if r <= rNS
+            rs .*= (r ./ rNS).^3
+        end
+        sin_theta = sin.(x0[2])
+    end
+    
+    # r = x0[:,1]
     
     # Reduced NS mass is done elsewhere...
     # Mass_NS = Mass_NS_in .* ones(length(r))
@@ -466,11 +480,11 @@ function g_schwartz(x0, Mass_NS; rNS=10.0)
     # rs = 2 * GNew .* Mass_NS ./ c_km.^2 .* ones(length(x0[:,1]))
     # suppress GR inside NS
     # rs[r .<= rNS] .= 0.0
-    rs = ones(eltype(r), size(r)) .* 2 * GNew .* Mass_NS ./ c_km.^2
+    # rs = ones(eltype(r), size(r)) .* 2 * GNew .* Mass_NS ./ c_km.^2
     # Mass_NS is already re-adjusted in func_axion!...
     # rs[r .<= rNS] .*= (r[r .<= rNS] ./ rNS).^3
 
-    sin_theta = sin.(x0[:,2])
+    # sin_theta = sin.(x0[:,2])
 
     g_tt = -1.0 ./ (1.0 .- rs ./ r);
     g_rr = (1.0 .- rs ./ r);
