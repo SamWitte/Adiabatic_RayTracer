@@ -1687,10 +1687,8 @@ function find_samples_new(maxR, θm, ωPul, B0, rNS, Mass_a, Mass_NS; n_max=6, b
     # solve differential equation with callback
     Mvars = [vvec_all, vvec_loc]
     prob = ODEProblem(func_line!, x0_all, (0, 2.2*maxR), Mvars, callback=cb_s)
-    # TEST THIS!
-    sol = solve(prob, Euler(), abstol=1e-4, reltol=1e-3, dt=2.0)
-    # sol = solve(prob, Tsit5(), abstol=1e-8, reltol=1e-8)
-    # sol = solve(prob, Tsit5(), abstol=1e-6, reltol=1e-5)
+    
+    sol = solve(prob, Euler(), abstol=1e-4, reltol=1e-3, dt=0.5)
 
     
     
