@@ -74,7 +74,7 @@ function get_Prob_nonAD(pos::Array, kpos::Array,
     t_start = zeros(Nc)
     g_tt, g_rr, g_thth, g_pp = RT.g_schwartz(x0_pl, Mass_NS);
     Bsphere = RT.GJ_Model_Sphereical(pos, t_start, θm, ωPul, B0, rNS; Mass_NS=Mass_NS, flat=flat)
-    ksphere = RT.k_sphere(pos, kpos, θm, ωPul, B0, rNS, Nc, Mass_NS, flat, bndry_lyr=bndry_lyr)
+    ksphere = RT.k_sphere(pos, kpos, θm, ωPul, B0, rNS, Nc, Mass_NS, Mass_a, flat, bndry_lyr=bndry_lyr)
     Bmag = sqrt.(RT.spatial_dot(Bsphere, Bsphere, Nc, x0_pl, Mass_NS)) .* 1.95e-2; # eV^2
     kmag = sqrt.(RT.spatial_dot(ksphere, ksphere, Nc, x0_pl, Mass_NS));
     ctheta_B = RT.spatial_dot(Bsphere, ksphere, Nc, x0_pl, Mass_NS) .* 1.95e-2 ./ (kmag .* Bmag)
@@ -84,7 +84,7 @@ function get_Prob_nonAD(pos::Array, kpos::Array,
         stheta_B ./= stheta_B
     end
     
-    v_group = RT.grad(RT.omega_function(x0_pl, RT.seed(ksphere), t_start, -erg_inf_ini, θm, ωPul, B0, rNS, Mass_NS, flat=flat, iso=isotropic, melrose=true))
+    v_group = RT.grad(RT.omega_function(x0_pl, RT.seed(ksphere), t_start, -erg_inf_ini, θm, ωPul, B0, rNS, Mass_NS, Mass_a, flat=flat, iso=isotropic, melrose=true))
     
     v_group[:, 1] ./= g_rr
     v_group[:, 2] ./= g_thth
@@ -174,7 +174,7 @@ function get_tree(first::RT.node, erg_inf_ini, vIfty_mag,
     # propagate photon or axion
     if event.species == "photon"
       # print("propagate photon \n")
-      Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS,
+      Mvars = [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, Mass_a,
                [erg_inf_ini], flat, isotropic, melrose, bndry_lyr]
       x_e,k_e,t_e,err_e,cut_short,xc,yc,zc,kxc,kyc,kzc,tc,Δωc,times = RT.propagate(
                     pos0, k0,
@@ -530,7 +530,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
                                 ωPul, B0, rNS, Mass_NS, Mass_a, melrose=melrose,
                                 isotropic=isotropic, flat=flat, ax_fix=true)
         
-        ksphere = RT.k_sphere(xpos_flat, k_init, θm, ωPul, B0, rNS, zeros(batchsize), Mass_NS, flat, bndry_lyr=bndry_lyr)
+        ksphere = RT.k_sphere(xpos_flat, k_init, θm, ωPul, B0, rNS, zeros(batchsize), Mass_NS, Mass_a, flat, bndry_lyr=bndry_lyr)
    
         Mvars =  [θm, ωPul, B0, rNS, gammaF, zeros(batchsize), Mass_NS, Mass_a, flat, isotropic, erg_ax, bndry_lyr]
         sln_δwp, sln_δk, sln_δE, cos_w, vgNorm, dk_vg, dE_vg, k_vg = RT.dwp_ds(xpos_flat, ksphere,  Mvars)
@@ -547,7 +547,7 @@ function main_runner_tree(Mass_a, Ax_g, θm, ωPul, B0, rNS, Mass_NS, ωProp,
         
         theta_sf = acos.(xpos_flat[:,3] ./ rmag)
         x0_pl = [rmag theta_sf atan.(xpos_flat[:,2], xpos_flat[:,1])]
-        jacobian_GR = RT.g_det(x0_pl, zeros(batchsize), θm, ωPul, B0, rNS, Mass_NS; flat=flat, bndry_lyr=bndry_lyr); # unitless
+        jacobian_GR = RT.g_det(x0_pl, zeros(batchsize), θm, ωPul, B0, rNS, Mass_NS, Mass_a; flat=flat, bndry_lyr=bndry_lyr); # unitless
         
         dense_extra = 2 ./ sqrt.(π) * (1.0 ./ (220.0 ./ c_km)) .* sqrt.(2.0 * Mass_NS * GNew / c_km^2 ./ rmag)
         # phaseS = jacVs.*phaseS.*jacobian_GR
